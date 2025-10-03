@@ -1,0 +1,34 @@
+name: clusterpy
+channels:
+  - <unknown>
+  - defaults
+  - conda-forge
+dependencies:
+  - intel-openmp
+  - ipykernel
+  - ipython
+  - jupyter_client
+  - jupyter_core
+  - matplotlib-base
+  - matplotlib-inline
+  - mkl
+  - mkl-service
+  - mkl_fft
+  - mkl_random
+  - mpi
+  - numpy
+  - numpy-base
+  - openjpeg
+  - pandas
+  - phonopy
+  - pickleshare
+  - pillow
+  - pip
+  - python
+  - scikit-learn
+  - scipy
+  - spglib
+  - pip:
+      - cython
+      - gb-code
+prefix: /home/chameric/.conda/envs/clusterpy
