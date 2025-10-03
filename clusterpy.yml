@@ -1,6 +1,5 @@
 name: clusterpy
 channels:
-  - <unknown>
   - defaults
   - conda-forge
 dependencies:
