@@ -16,8 +16,8 @@ bPlotEig=False
 L=1e-3
 Nx=2048
 x = np.linspace(0.0, L, Nx)
-with open("bte_1d.pkl", "rb") as f:
-    ts, Tsnaps = pickle.load(f)
+with open("bte_1d_flux.pkl", "rb") as f:
+    ts, Tsnaps, flux = pickle.load(f)
 if bPlot:# Just a little plotting of as-loaded contours
     mpl.rcParams.update({"figure.figsize": (7, 4)})
     time_slice = np.linspace(1,13646,20,dtype=int)
@@ -62,25 +62,25 @@ def interp_temp(x,c):
     return legval(x, c,tensor=False) #np.sin(np.pi * x / Lx)  # W/m²
 scale = lambda x: 2 * (x - x.min()) / (x.max() - x.min()) - 1
 
-def loadGinterpolants(nevery, bPlot=False):
+def loadGinterpolants(ts, field, nevery, bPlot=False):
     G = [] #This is a list of Legendre coefficients every n'th time point
     time_slice = np.arange(0,13647,nevery,dtype=int)
     #time_slice = np.linspace(1,13646,20,dtype=int)
     ts_short = ts[time_slice]
-    Tshort = Tsnaps[time_slice]
-    for Ts in Tshort:
-        c=decompose_field(x[100:1848],Ts.T[100:1848]*1e-9)
+    Fshort = field[time_slice]
+    for Fs in Fshort:
+        c=decompose_field(x[100:1848],Fs.T[100:1848]*1e-9)
         G.append(c[:,0])
         if bPlot: #Plot efficiency of Legendre interpolation
-            T = interp_temp(scale(x[100:1848]),c)
-            plt.plot(x[100:1848] * 1e6,T)
-            plt.plot(x[100:1848] * 1e6,Ts.T[100:1848]*1e-9,'o',markevery=100)
+            F = interp_temp(scale(x[100:1848]),c)
+            plt.plot(x[100:1848] * 1e6,F)
+            plt.plot(x[100:1848] * 1e6,Fs.T[100:1848]*1e-9,'o',markevery=100)
     if bPlot: #Plot efficiency of Legendre interpolation
         plt.savefig('bte_temps_interp.png')
         plt.show()
     return G,time_slice
 
-G,time_slice = loadGinterpolants(20)
+G,time_slice = loadGinterpolants(ts, Tsnaps, 20)
 ts_short=ts[time_slice]
 #print(np.array(G))
 #This next section is a first order attempt to visualize the system and eigenvalues, it has yet to be interesting
@@ -121,7 +121,7 @@ for i in range(len(G)-11):
         plt.show()
 
 #block4
-G,time_slice = loadGinterpolants(1)
+G,time_slice = loadGinterpolants(ts, Tsnaps, 1)
 
 #block5
 #print(np.array(G))
