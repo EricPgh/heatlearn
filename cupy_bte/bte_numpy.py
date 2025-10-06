@@ -118,7 +118,7 @@ class BTESolver:
         rhs_plus = - (+1.0) * (v2 * dgdx_plus) - (g_plus / tau2)
         rhs_minus = - (-1.0) * (v2 * dgdx_minus) - (g_minus / tau2)
 
-        rxn = (g[:,0,:]+g[:,1,:])*self.inventory*1e0
+        rxn = np.sum(g, axis=1)*self.inventory*1e0
         sink = rxn+100.
         #print(rhs_plus.shape,rhs_minus.shape)
         #print(g.shape,g[:,0,:].shape)
@@ -138,11 +138,12 @@ class BTESolver:
         # ? = (sum over i,s g_{i,s}) / ?_i C_i
         return np.sum(self.g, axis=(0,1)) / self.Ctot  # (Nx,)
 
-    def run(self, progress: bool = True):
+    def run(self, progress: bool = True, write_flux: bool = False):
         t = 0.0
         nsteps = int(np.ceil(self.p.t_final / self.dt))
         ts = []
         Tsnaps = []
+        flux = []
         every = max(1, self.p.save_every)
 
         for n in range(nsteps):
@@ -153,9 +154,12 @@ class BTESolver:
                 ts.append(t)
                 #Tsnaps.append(Ts)
                 Tsnaps.append(self.inventory)
+                flux.append(np.sum(self.g, axis=(0,1)))
                 if progress:
                     print(f"t = {t:.3e} s  (dt={self.dt:.3e}, step {n+1}/{nsteps})  Tmean={Ts.mean():+.3e} K")
-        return np.array(ts), np.array(Tsnaps)#np.stack(Tsnaps, axis=0)
+        if write_flux:
+            return np.array(ts), np.array(Tsnaps), np.array(flux) #np.stack(Tsnaps, axis=0)
+        return np.array(ts), np.array(Tsnaps) #np.stack(Tsnaps, axis=0)
 
 
 def demo():
@@ -174,9 +178,9 @@ def demo():
     )
 
     solver = BTESolver(p)
-    ts, Tsnaps = solver.run(progress=True)
-    with open('bte_1d.pkl','wb') as file:
-        pickle.dump([ts,Tsnaps],file)
+    ts, Tsnaps, flux = solver.run(progress=True, write_flux=True)
+    with open('bte_1d_flux.pkl','wb') as file:
+        pickle.dump([ts,Tsnaps,flux],file)
 
     if True:#try:
         import matplotlib.pyplot as plt
