@@ -4,6 +4,7 @@
 Created on Sun Oct  5 18:17:02 2025
 
 @author: EricPgh
+@abstract: this one contains the working version for 2nd order process and notes for flux.
 """
 
 #block2
