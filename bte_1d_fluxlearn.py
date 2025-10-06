@@ -17,15 +17,15 @@ L=1e-3
 Nx=2048
 x = np.linspace(0.0, L, Nx)
 with open("bte_1d_flux.pkl", "rb") as f:
-    ts, Tsnaps, flux = pickle.load(f)
+    ts, npop, flux = pickle.load(f)
 if bPlot:# Just a little plotting of as-loaded contours
     mpl.rcParams.update({"figure.figsize": (7, 4)})
     time_slice = np.linspace(1,13646,20,dtype=int)
     ts_short = ts[time_slice]
-    Tshort = Tsnaps[time_slice]
-    for Ts in Tshort:
+    Nshort = npop[time_slice]
+    for Ns in Nshort:
     #for Ts in Tsnaps:#[np.array([1,6,-1])]:
-        plt.plot(x * 1e6, Ts.T)#, label="?(x, t_final)")
+        plt.plot(x * 1e6, Ns.T)#, label="?(x, t_final)")
     plt.xlabel("x [m]")
     #plt.ylabel("temperature perturbation ? [K]")
     plt.title("1D Inventory from Upwind BTE")
@@ -80,7 +80,7 @@ def loadGinterpolants(ts, field, nevery, bPlot=False):
         plt.show()
     return G,time_slice
 
-G,time_slice = loadGinterpolants(ts, Tsnaps, 20)
+G,time_slice = loadGinterpolants(ts, npop, 20)
 ts_short=ts[time_slice]
 #print(np.array(G))
 #This next section is a first order attempt to visualize the system and eigenvalues, it has yet to be interesting
@@ -121,7 +121,8 @@ for i in range(len(G)-11):
         plt.show()
 
 #block4
-G,time_slice = loadGinterpolants(ts, Tsnaps, 1)
+G,time_slice = loadGinterpolants(ts, npop, 1)
+GF,time_slice = loadGinterpolants(ts, flux, 1)
 
 #block5
 #print(np.array(G))
@@ -222,8 +223,8 @@ for i in range(nA):
 #print(lTimes[0])
 
 #With propagators formed, here begins the forward euler loop. this is intended to operate between large strides in the pickle solutions, starting with the beginning conditions of one stride and matching the final solutions (from BTE) at the end of the stride
-Tstart=Tsnaps[0].T[100:1848] #Temperature profile from the start
-c0=c1=decompose_field(x[100:1848],Tstart*1e-9) #Decompose the inside layer only, scale the temperature to natural units, here I'm initiating the first two as the same since this is a derivative process it will begin slowly
+Nstart=npop[0].T[100:1848] #Temperature profile from the start
+c0=c1=decompose_field(x[100:1848],Nstart*1e-9) #Decompose the inside layer only, scale the temperature to natural units, here I'm initiating the first two as the same since this is a derivative process it will begin slowly
 #print(c0)
 #Tappx = interp_temp(scale(x[100:1848]),c0)
 #print(Tappx)
@@ -245,13 +246,13 @@ Hp = spread/sum(spread)
 
 #Begin integration
 i=0
-Tavg_0 = 0.1 #Tavg at start of epoch, 0.1 is just this dataset and needs updated
+Navg_0 = 0.1 #Tavg at start of epoch, 0.1 is just this dataset and needs updated
 t_0 = 0.
 
 colormap = plt.get_cmap('tab10', nepoch)
 colors = [colormap(k) for k in range(nepoch)] #when plotting exact vs approx curves, each epoch has own color from cmap
-for t, Ts,col in zip(ts[time_slice],Tsnaps[time_slice],colors):#[0:1]: 10 elements to loop, epochs
-    Tavg = np.dot(H.T,decompose_field(x[100:1848],Ts.T[100:1848]*1e-9)) #Ts is the BTE solution and this operation with H measures the average T at the epoch start
+for t, Ns,col in zip(ts[time_slice],npop[time_slice],colors):#[0:1]: 10 elements to loop, epochs
+    Navg = np.dot(H.T,decompose_field(x[100:1848],Ns.T[100:1848]*1e-9)) #Ts is the BTE solution and this operation with H measures the average T at the epoch start
     while lTimes[i]<t: #lTimes was recorded during formation of the propagators, this is the within-epoch integration loop that runs until the time value of the propagator reaches t, the epoch end
         '''if i<7: #debugging
             print(lAc[i])
@@ -267,7 +268,7 @@ for t, Ts,col in zip(ts[time_slice],Tsnaps[time_slice],colors):#[0:1]: 10 elemen
             Hf = np.dot(H.T,c2)
             norm = np.sqrt(np.dot(c2.T,c2)[0,0])
             #print(norm)
-            y = (Tavg-Tavg_0)*(lTimes[i]-t_0)/(t-t_0)+Tavg_0
+            y = (Navg-Navg_0)*(lTimes[i]-t_0)/(t-t_0)+Navg_0
             #print(Hf,y,Hp.shape,c2.shape)
             if False and i%10==0:
                 print(c2.T)
@@ -286,8 +287,8 @@ for t, Ts,col in zip(ts[time_slice],Tsnaps[time_slice],colors):#[0:1]: 10 elemen
         i+=1
     #print(i)
     plt.plot(x[100:1848] * 1e6,interp_temp(scale(x[100:1848]),c2),color=col)
-    plt.plot(x[100:1848] * 1e6,Ts.T[100:1848]*1e-9,'o',color=col,markevery=100)
-    Tavg_0 = Tavg #Also part of an in-process corrector mechanism.
+    plt.plot(x[100:1848] * 1e6,Ns.T[100:1848]*1e-9,'o',color=col,markevery=100)
+    Navg_0 = Navg #Also part of an in-process corrector mechanism.
     t_0 = t
     #break
 plt.ylim(0.0,0.101)
