@@ -37,11 +37,7 @@ from dataclasses import dataclass
 from typing import Optional, Tuple
 
 import numpy as np
-try:
-    import cupy as cp
-except Exception as e:
-    raise SystemExit("CuPy is required. Install a CUDA-matched build, e.g. 'pip install cupy-cuda12x'.")
-
+#Cupy and GPU eliminated
 
 @dataclass
 class BTEParams:
@@ -62,24 +58,24 @@ class BTEParams:
 class BTESolver:
     def __init__(self, p: BTEParams):
         self.p = p
-        self.x = cp.linspace(0.0, p.L, p.Nx)
+        self.x = np.linspace(0.0, p.L, p.Nx)
         self.dx = p.L / (p.Nx - 1)
-        self.inventory = cp.array([0.]*100+[1e8]*1848+[0.]*100).reshape((1,2048))
+        self.inventory = np.array([0.]*100+[1e8]*1848+[0.]*100).reshape((1,2048))
         print(self.inventory)
 
         # Branch params as device arrays
-        self.v = cp.asarray(p.v, dtype=cp.float64)         # (2,)
-        self.tau = cp.asarray(p.tau, dtype=cp.float64)     # (2,)
-        self.C = cp.asarray(p.C, dtype=cp.float64)         # (2,)
-        self.Ctot = float(cp.sum(self.C).get())
+        self.v = p.v         # (2,)
+        self.tau = p.tau     # (2,)
+        self.C = p.C         # (2,)
+        self.Ctot = float(np.sum(self.C))
 
         # State: g[i, s, x] with i in {0,1}, s in {0: +1, 1: -1}
-        self.g = cp.zeros((2, 2, p.Nx), dtype=cp.float64)
+        self.g = np.zeros((2, 2, p.Nx), dtype=float)
 
         # Precompute stable dt from CFL and RTA
-        vmax = float(cp.max(cp.abs(self.v)).get())
+        vmax = float(np.max(np.abs(self.v)))
         dt_cfl = p.cfl * self.dx / max(vmax, 1e-30)
-        dt_rta = float(cp.min(self.tau).get()) / 10.0
+        dt_rta = float(np.min(self.tau)) / 10.0
         dt = min(dt_cfl, dt_rta)
         if p.dt_cap is not None:
             dt = min(dt, p.dt_cap)
@@ -103,14 +99,14 @@ class BTESolver:
         # s_idx=0 corresponds to s=+1, s_idx=1 corresponds to s=-1
         # For s=+1: ?g/?x ? (g[x] - g[x-1]) / dx, with inflow at x=0 set to g_in_L
         g_plus = g[:, 0, :]  # (2,Nx)
-        g_plus_up = cp.roll(g_plus, 1, axis=-1)
+        g_plus_up = np.roll(g_plus, 1, axis=-1) #Does numpy have roll()? let's hope
         # set upwind neighbor at the left boundary to inflow value
         g_plus_up[:, 0] = self.g_in_L[:, 0]
         dgdx_plus = (g_plus - g_plus_up) / dx
 
         # For s=-1: ?g/?x ? (g[x+1] - g[x]) / dx, with inflow at x=L set to g_in_R
         g_minus = g[:, 1, :]
-        g_minus_dn = cp.roll(g_minus, -1, axis=-1)
+        g_minus_dn = np.roll(g_minus, -1, axis=-1)
         g_minus_dn[:, -1] = self.g_in_R[:, 0]
         dgdx_minus = (g_minus_dn - g_minus) / dx
 
@@ -129,8 +125,8 @@ class BTESolver:
         #print(sink.shape,self.inventory.shape)
         #exit()
         self.inventory -= dt*(rxn[0,:]+rxn[1,:])
-        self.inventory = cp.maximum(self.inventory,cp.zeros_like(self.inventory))
-        #sink = cp.array([[min(0.,1-5*(i-1024)**2)]*2 for i in range(self.p.Nx)]).T
+        self.inventory = np.maximum(self.inventory,np.zeros_like(self.inventory))
+        #sink = np.array([[min(0.,1-5*(i-1024)**2)]*2 for i in range(self.p.Nx)]).T
         g[:, 0, :] = g_plus + dt * (rhs_plus - sink)
         g[:, 1, :] = g_minus + dt * (rhs_minus - sink)
 
@@ -138,9 +134,9 @@ class BTESolver:
         g[:, 0, 0] = self.g_in_L[:, 0]  # right-going at left boundary
         g[:, 1, -1] = self.g_in_R[:, 0] # left-going at right boundary
 
-    def temperature(self) -> cp.ndarray:
+    def temperature(self) -> np.ndarray:
         # ? = (sum over i,s g_{i,s}) / ?_i C_i
-        return cp.sum(self.g, axis=(0,1)) / self.Ctot  # (Nx,)
+        return np.sum(self.g, axis=(0,1)) / self.Ctot  # (Nx,)
 
     def run(self, progress: bool = True):
         t = 0.0
@@ -153,10 +149,10 @@ class BTESolver:
             self.step()
             t += self.dt
             if n % every == 0 or n == nsteps - 1:
-                Ts = self.temperature().get()  # host copy for diagnostics
+                Ts = self.temperature()  # host copy for diagnostics
                 ts.append(t)
                 #Tsnaps.append(Ts)
-                Tsnaps.append(self.inventory.get())
+                Tsnaps.append(self.inventory)
                 if progress:
                     print(f"t = {t:.3e} s  (dt={self.dt:.3e}, step {n+1}/{nsteps})  Tmean={Ts.mean():+.3e} K")
         return np.array(ts), np.array(Tsnaps)#np.stack(Tsnaps, axis=0)
@@ -186,7 +182,7 @@ def demo():
         import matplotlib.pyplot as plt
         import matplotlib as mpl
         mpl.rcParams.update({"figure.figsize": (7, 4)})
-        x = cp.asnumpy(solver.x)
+        x = solver.x
         for Ts in Tsnaps:#[np.array([1,6,-1])]:
             plt.plot(x * 1e6, Ts.T)#, label="?(x, t_final)")
         plt.xlabel("x [m]")
