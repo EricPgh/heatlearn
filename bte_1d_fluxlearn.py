@@ -333,3 +333,6 @@ dF1 = np.array(GF[strt+i*major_stride+minor_stride:strt+i*major_stride+npts*mino
 Y = np.concatenate((dN1,dF1),axis=0)
 
 #I know there does exist a linear transform (Greens function style) such that F=G*BF. And I have demonstrated this with basic thermal fields (Fourier eq) in 2D. However in this case the domain is 1D and I am predicting dF(t)=G*BF(t). These matrices N0 and F0 are multiple prior observations that evolve into multiple posterior observations. What is BF in that space?
+#The time varying greens function method applies a kernel to the input history by convolution which is also a linear process. Therefore the same method to develop the transform matrix should admit a convolution operation.
+#If the input signal is FB(t) and the output of the convolution is F(t+dt), then the FB should be :=FB(dt) (?yes?) and is the forcing function being applied during the interval dt. I desire to apply it as a vector of Legendre coefficients, probably up to n=3 (or 2?). If each time step is short, the polynomials become splines across the many time solutions. Using orthogonal coordinates should permit the superposition of multiple vectors to form arbitrary input signals.
+#This individual task can be developed separate of the other nonlinear process to show viability.
