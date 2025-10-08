@@ -234,12 +234,9 @@ Nstart=npop[0].T[100:1848] #population profile from the start
 Fstart=flux[0].T[100:1848] #flux profile from the start
 n0=decompose_field(x[100:1848],Nstart*1e-9) #Decompose the inside layer only, scale the temperature to natural units
 f0=decompose_field(x[100:1848],Fstart*1e-9) #Decompose the inside layer only, scale the temperature to natural units
-<c0=np.concatenate((n0,f0),axis=0)
+c0=np.concatenate((n0,f0),axis=0)
 nflux=np.concatenate((npop,flux),axis=0)
 Nn = n0.shape[0]
->>>>>>>+main
-======
->>>>>>> origin/main
 #print(c0)
 #Tappx = interp_temp(scale(x[100:1848]),c0)
 #print(Tappx)
@@ -267,26 +264,15 @@ t_0 = 0.
 
 colormap = plt.get_cmap('tab10', nepoch)
 colors = [colormap(k) for k in range(nepoch)] #when plotting exact vs approx curves, each epoch has own color from cmap
-<for t, Cs, col in zip(ts[time_slice],nflux[time_slice],colors):#[0:1]: 10 elements to loop, epochs
+for t, Cs, col in zip(ts[time_slice],nflux[time_slice],colors):#[0:1]: 10 elements to loop, epochs
     Navg = np.dot(H.T,decompose_field(x[100:1848],Cs[Nn,:].T[100:1848]*1e-9)) #Ts is the BTE solution and this operation with H measures the average T at the epoch start
->>>>>>>+main
-======
-for t, Ns, Fs, col in zip(ts[time_slice],npop[time_slice],flux[time_slice],colors):#[0:1]: 10 elements to loop, epochs
-    Navg = np.dot(H.T,decompose_field(x[100:1848],Ns.T[100:1848]*1e-9)) #Ts is the BTE solution and this operation with H measures the average T at the epoch start
->>>>>>> origin/main
     while lTimes[i]<t: #lTimes was recorded during formation of the propagators, this is the within-epoch integration loop that runs until the time value of the propagator reaches t, the epoch end
         '''if i<7: #debugging
             print(lAc[i])
         else:
             break'''
-<        #The process is as such, the prior solution n0 and f0 are stacked and multiplied with current Ac (i'th) to provide dc(:=c1-c0)
-        dc = lAc[i]@
->>>>>>>+main
-======
-restart here 
-        #The process is as such, the prior two solutions c0,c1 are stacked and multiplied with current Ac (i'th) to provide dc(:=c2-c1)
-        dc = lAc[i]@np.concatenate((c1,c0),axis=0)
->>>>>>> origin/main
+        #The process is as such, the prior solution n0 and f0 are stacked and multiplied with current Ac (i'th) to provide dc(:=c1-c0)
+        dc = lAc[i]@c0
         #however this difference is only over the minor stride interval, but we are counting by major strides, so the difference, dc, needs to be scaled by major_stride/minor_stride to predict the increase of c2 over c1 when major_stride had elapsed
         c1=c0+ (major_stride/minor_stride)*dc #e.g. +12*dc
         #print(c2)
