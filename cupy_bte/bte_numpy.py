@@ -64,9 +64,9 @@ class BTESolver:
         print(self.inventory)
 
         # Branch params as device arrays
-        self.v = p.v         # (2,)
-        self.tau = p.tau     # (2,)
-        self.C = p.C         # (2,)
+        self.v = np.array(p.v,dtype=float)         # (2,)
+        self.tau = np.array(p.tau,dtype=float)     # (2,)
+        self.C = np.array(p.C,dtype=float)         # (2,)
         self.Ctot = float(np.sum(self.C))
 
         # State: g[i, s, x] with i in {0,1}, s in {0: +1, 1: -1}
@@ -154,9 +154,11 @@ class BTESolver:
                 ts.append(t)
                 #Tsnaps.append(Ts)
                 Tsnaps.append(self.inventory)
-                flux.append(np.sum(self.g, axis=(0,1)))
+                flux.append(np.sum(self.g, axis=(0,1)).reshape((1,2048))) #I had to make this consistent with inventory. The way it came out was :,1,Nx size, not what I intended but currently works as its read by the learner code.
                 if progress:
                     print(f"t = {t:.3e} s  (dt={self.dt:.3e}, step {n+1}/{nsteps})  Tmean={Ts.mean():+.3e} K")
+        print(np.array(flux).shape)
+        print(np.array(Tsnaps).shape)
         if write_flux:
             return np.array(ts), np.array(Tsnaps), np.array(flux) #np.stack(Tsnaps, axis=0)
         return np.array(ts), np.array(Tsnaps) #np.stack(Tsnaps, axis=0)
@@ -182,7 +184,7 @@ def demo():
     with open('bte_1d_flux.pkl','wb') as file:
         pickle.dump([ts,Tsnaps,flux],file)
 
-    if True:#try:
+    if False:#try:
         import matplotlib.pyplot as plt
         import matplotlib as mpl
         mpl.rcParams.update({"figure.figsize": (7, 4)})
