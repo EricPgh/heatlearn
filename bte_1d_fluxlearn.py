@@ -132,12 +132,12 @@ fig, axs = plt.subplots(nA,nM,figsize=(nM,2*nA))
 Gt = []
 lAc = []
 print(len(GN))
-cmp=5 #fidelity or compression again, up to npts
+cmp=3 #fidelity or compression again, up to npts
 #for i in range(0,len(G)-11,1):
 strt = 1 #where in the total pickle file should the imaging start, beginning, middle, end?
-major_stride = 10 #major is how many timepoints to skip for each axis for imaging
-minor_stride = 2 #minor is how many timepoints between each column of the X0,X1 observations
-npts = 8 #how many observations to include in each SVD
+major_stride = 12 #major is how many timepoints to skip for each axis for imaging
+minor_stride = 1 #minor is how many timepoints between each column of the X0,X1 observations
+npts = 6 #how many observations to include in each SVD
 for i,ax in enumerate(axs):
     #Gt.append(G[i:11+i]) #each element contains a block slice of GN
     #The 2x first order version uses priors N0 and F0 to predict posterior Y, e.g. dN,dF
@@ -180,6 +180,7 @@ for i,ax in enumerate(axs):
     for axi,M in zip(ax,[u[:,0:cmp],np.diag(s[0:cmp]),v[0:cmp,:],Ac,A,Lam,Xi.real,Xi.imag][:nM]):
         im = axi.imshow(M, cmap='hot', vmin=-1,vmax=1,
            origin='upper', interpolation='nearest', aspect='equal')
+        fig.colorbar(im, ax=axi, fraction=0.046, pad=0.04)
 #fig.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
 plt.savefig('bte_2x1stOrd_transforms1.png')
 
@@ -188,8 +189,9 @@ fig, axs = plt.subplots(nA,1,figsize=(8,12))
 
 print(len(lAc))
 for ax,i in zip(axs, list(range(0,nA))):#len(lAc),100))[:9]):
-    im = ax.imshow(lAc[i], cmap='hot', #vmin=-50,vmax=50,
+    im = ax.imshow(lAc[i], cmap='hot', vmin=-15,vmax=5,
            origin='upper', interpolation='nearest', aspect='equal')
+    fig.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
 plt.tight_layout()
 plt.savefig('bte_2x1stOrd_matrix_heatmaps1.png')
 plt.show()
@@ -234,7 +236,9 @@ Nstart=npop[0].T[100:1848] #population profile from the start
 Fstart=flux[0].T[100:1848] #flux profile from the start
 n0=decompose_field(x[100:1848],Nstart*1e-9) #Decompose the inside layer only, scale the temperature to natural units
 f0=decompose_field(x[100:1848],Fstart*1e-9) #Decompose the inside layer only, scale the temperature to natural units
+print(n0.shape,f0.shape)
 c0=np.concatenate((n0,f0),axis=0)
+print(c0.shape)
 nflux=np.concatenate((npop,flux),axis=0)
 Nn = n0.shape[0]
 #print(c0)
@@ -265,7 +269,7 @@ t_0 = 0.
 colormap = plt.get_cmap('tab10', nepoch)
 colors = [colormap(k) for k in range(nepoch)] #when plotting exact vs approx curves, each epoch has own color from cmap
 for t, Cs, col in zip(ts[time_slice],nflux[time_slice],colors):#[0:1]: 10 elements to loop, epochs
-    Navg = np.dot(H.T,decompose_field(x[100:1848],Cs[Nn,:].T[100:1848]*1e-9)) #Ts is the BTE solution and this operation with H measures the average T at the epoch start
+    Navg = np.dot(H.T,decompose_field(x[100:1848],Cs[:Nn].T[100:1848]*1e-9)) #Ts is the BTE solution and this operation with H measures the average T at the epoch start
     while lTimes[i]<t: #lTimes was recorded during formation of the propagators, this is the within-epoch integration loop that runs until the time value of the propagator reaches t, the epoch end
         '''if i<7: #debugging
             print(lAc[i])
@@ -298,8 +302,8 @@ for t, Cs, col in zip(ts[time_slice],nflux[time_slice],colors):#[0:1]: 10 elemen
         #print(c)
         i+=1
     #print(i)
-    plt.plot(x[100:1848] * 1e6,interp_temp(scale(x[100:1848]),c1[Nn,:]),color=col)
-    plt.plot(x[100:1848] * 1e6,Cs[Nn,:].T[100:1848]*1e-9,'o',color=col,markevery=100)
+    plt.plot(x[100:1848] * 1e6,interp_temp(scale(x[100:1848]),c1[:Nn]),color=col)
+    plt.plot(x[100:1848] * 1e6,Cs[:Nn].T[100:1848]*1e-9,'o',color=col,markevery=100)
     Navg_0 = Navg #Also part of an in-process corrector mechanism.
     t_0 = t
     #break
