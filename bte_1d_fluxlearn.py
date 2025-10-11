@@ -13,7 +13,8 @@ import matplotlib.pyplot as plt
 import matplotlib as mpl
 bPlot=True
 bPlotEig=False
-L=1e-3
+L= 1.0 #mm 1e-3
+Lunits = 'mm'
 Nx=2048
 Linert = 100
 Rinert = 100
@@ -21,7 +22,7 @@ Mactive = Nx-Linert-Rinert
 x = np.linspace(0.0, L, Nx)
 xcenter = x[Linert:Mactive]
 with open("bte_1d_flux.pkl", "rb") as f:
-    ts, npop, flux = pickle.load(f)
+    ts, npop, flux = pickle.load(f) #next time I should have x, xcenter come through the pickle
 #flux*=1000.
 if bPlot:# Just a little plotting of as-loaded contours
     mpl.rcParams.update({"figure.figsize": (7, 4)})
@@ -30,13 +31,13 @@ if bPlot:# Just a little plotting of as-loaded contours
     Nshort = npop[time_slice]
     for Ns in Nshort:
     #for Ts in Tsnaps:#[np.array([1,6,-1])]:
-        plt.plot(x * 1e6, Ns.T)#, label="?(x, t_final)")
-    plt.xlabel("x [m]")
+        plt.plot(x , Ns.T)#, label="?(x, t_final)")
+    plt.xlabel(f"x [{Lunits}]")
     #plt.ylabel("temperature perturbation ? [K]")
     plt.title("1D Inventory from Upwind BTE")
     #plt.legend()
     plt.tight_layout()
-    plt.xlim(0,1000)
+    plt.xlim(0,L)
     plt.ylim(0,1e8)
     plt.savefig('bte_temps_as-is.png')
     plt.show()
@@ -80,9 +81,11 @@ def loadGinterpolants(ts, field, nevery, bPlot=False):
         G.append(c) #unnecessary [:,0])
         if bPlot: #Plot efficiency of Legendre interpolation
             F = interp_temp(xcenter,c)
-            plt.plot(xcenter * 1e6,F)
-            plt.plot(xcenter * 1e6,Fs.T[Linert:Mactive]*1e-9,'o',markevery=100)
+            plt.plot(xcenter ,F)
+            plt.plot(xcenter ,Fs.T[Linert:Mactive]*1e-9,'o',markevery=100)
     if bPlot: #Plot efficiency of Legendre interpolation
+        plt.xlim(0,L)
+        plt.xlabel(f"x [{Lunits}]")
         plt.savefig('bte_temps_interp.png')
         plt.show()
     return G,time_slice
@@ -127,13 +130,13 @@ for i in range(len(G)-11):
         for ax,M in zip(axs[i,:],[A,Ac,Lam,Xi.real,Xi.imag]):#[0,:]):
             im = ax.imshow(M, cmap='hot', vmin=-.2,vmax=.2,
                    origin='upper', interpolation='nearest', aspect='equal')
-            ax.set_xlim(0,1000)
+            ax.set_xlim(0,L)
             ax.set_ylim(0,1e-1)
         fig.savefig('bte_temps_eigs.png')
         fig.show()
         fig.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
         #plt.title(f'Green\'s Function after {Nt} steps')
-        #plt.xlabel('x (m)')
+        #plt.xlabel(f"x [{Lunits}]")
         #plt.ylabel('y (m)')
         plt.tight_layout()
         #plt.savefig('matrix_evolution.png')
@@ -197,7 +200,7 @@ for i,ax in enumerate(axs):
     Lam,Xi = eig(Ardc0)
     Lam = np.diag(np.abs(Lam))'''
     lAc.append(A) #list of transformations from one major stride to next
-    for axi,M in zip(ax,[u[:,0:cmp],np.diag(s[0:cmp]),v[0:cmp,:],Ac,A,Lam,Xi.real,Xi.imag][:nM]):
+    for axi,M in zip(ax,[u[:,:cmp],np.diag(s[:cmp]),v[:cmp,:],Ac,A,Lam,Xi.real,Xi.imag][:nM]):
         im = axi.imshow(M, cmap='hot', vmin=-1,vmax=1,
            origin='upper', interpolation='nearest', aspect='equal')
         fig.colorbar(im, ax=axi, fraction=0.046, pad=0.04)
@@ -264,7 +267,7 @@ Nn = n0.shape[0]
 #print(c0)
 #Tappx = interp_temp(xcenter,c0)
 #print(Tappx)
-#plt.plot(xcenter * 1e6,Tappx)
+#plt.plot(xcenter ,Tappx)
 #print(c)
 nepoch=10 #I'm defining each epoch to be the period I'm running parallel integration alongside BTE solutions. Comparison happens at the epoch end. 
 time_slice =np.linspace(100,5000,nepoch,dtype=int) #these i values are the epoch end points, so the first epoch runs 
@@ -322,12 +325,14 @@ for t, Cs, col in zip(ts[time_slice],nflux[time_slice],colors):#[0:1]: 10 elemen
         #print(c)
         i+=1
     #print(i)
-    plt.plot(xcenter * 1e6,interp_temp(xcenter,c1[:Nn]),color=col)
-    plt.plot(xcenter * 1e6,Cs[:Nn].T[Linert:Mactive]*1e-9,'o',color=col,markevery=100)
+    plt.plot(xcenter ,interp_temp(xcenter,c1[:Nn]),color=col)
+    plt.plot(xcenter ,Cs[:Nn].T[Linert:Mactive]*1e-9,'o',color=col,markevery=100)
     Navg_0 = Navg #Also part of an in-process corrector mechanism.
     t_0 = t
     #break
+plt.xlim(0.,L)
 plt.ylim(0.0,0.101)
+plt.xlabel(f"x [{Lunits}]")
 plt.savefig('bte_predictor_performance.png')
 plt.show()
 
@@ -343,7 +348,7 @@ if False: #Just rying to see patterns in the transform
                 origin='upper', interpolation='nearest', aspect='equal')'''
     fig.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
     #plt.title(f'Green\'s Function after {Nt} steps')
-    #plt.xlabel('x (m)')
+    #plt.xlabel(f"x [{Lunits}]")
     #plt.ylabel('y (m)')
     plt.tight_layout()
     #plt.savefig('matrix_evolution.png')
