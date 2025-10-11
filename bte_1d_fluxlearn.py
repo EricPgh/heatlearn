@@ -49,13 +49,12 @@ if bPlot:# Just a little plotting of as-loaded contours
 
 from numpy.linalg import svd,eig
 fig, axs = plt.subplots(figsize=(6,4))
-def decompose_field(x,T):
+def decompose_field(x,T, deg_x= 12):
     from numpy.polynomial.legendre import legvander,legval
     # Rescale coordinates to [-1, 1]
     x_scaled = 2 * (x - x.min()) / (x.max() - x.min()) - 1
     
     # Get Vandermonde matrix (evaluated basis)
-    deg_x = 12
     V = legvander(x_scaled, deg_x)  # shape: (N_points)
     
     #The following least-squares call performs this task:
