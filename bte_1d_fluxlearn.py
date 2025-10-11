@@ -25,7 +25,7 @@ with open("bte_1d_flux.pkl", "rb") as f:
 #flux*=1000.
 if bPlot:# Just a little plotting of as-loaded contours
     mpl.rcParams.update({"figure.figsize": (7, 4)})
-    time_slice = np.linspace(1,13646,20,dtype=int)
+    time_slice = np.linspace(1,len(ts),20,dtype=int)
     ts_short = ts[time_slice]
     Nshort = npop[time_slice]
     for Ns in Nshort:
@@ -71,8 +71,8 @@ def interp_temp(x,c):
 
 def loadGinterpolants(ts, field, nevery, bPlot=False):
     G = [] #This is a list of Legendre coefficients every n'th time point
-    time_slice = np.arange(0,13647,nevery,dtype=int)
-    #time_slice = np.linspace(1,13646,20,dtype=int)
+    time_slice = np.arange(0,len(ts)+1,nevery,dtype=int)
+    #time_slice = np.linspace(1,len(ts),20,dtype=int)
     ts_short = ts[time_slice]
     Fshort = field[time_slice]
     for Fs in Fshort:
