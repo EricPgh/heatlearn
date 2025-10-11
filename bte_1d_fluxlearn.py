@@ -83,6 +83,14 @@ def loadGinterpolants(ts, field, nevery, bPlot=False):
         plt.show()
     return G,time_slice
 
+def pseudo_inverse_from_svd(u, s, vt, r=None, tol=1e-12):
+    if r is None:
+        # choose rank by tol relative to max singular
+        r = np.sum(s > tol * s.max())
+    s_inv = np.zeros_like(s)
+    s_inv[:r] = 1.0 / s[:r]
+    return (vt.T * s_inv) @ u.T  # returns X^+ (shape matches)
+
 G,time_slice = loadGinterpolants(ts, npop, 20)
 ts_short=ts[time_slice]
 #print(np.array(G))
@@ -98,14 +106,16 @@ for i in range(len(G)-11):
     Y = np.array(G[i+1:12+i]) #DMD measures the system by its evolution to posterior observations
     #print(X.shape,Y.shape)
     #Presume Y(posterior)=A(system transform)*X(prior), then Y=AUSV
-    u,s,v = svd(X,full_matrices=False) #full matrices=false, want to be able to compress, S has nonzero only
+    u,s,vt = svd(X,full_matrices=False) #full matrices=false, want to be able to compress, S has nonzero only
     #print(s)
     #print(Y.shape,v.T[:,0:cmp].shape,u.T[0:cmp,:].shape)
-    sinv = 1./s #diagonal singular values, I guess vectorized
-    A = Y@v.T@np.diag(sinv)@u.T #Use SVD as pseudoinverse of X on Y to get system response
-    Ac = Y@v.T[:,0:cmp]@np.diag(sinv[0:cmp])@u.T[0:cmp,:] #compressed versions
+    #sinv = 1./s #diagonal singular values, I guess vectorized
+    X_pinv = pseudo_inverse_from_svd(u, s, vt) # v.T@np.diag(sinv)@u.T
+    A = Y@X_pinv #Use SVD as pseudoinverse of X on Y to get system response
+    X_pinv = pseudo_inverse_from_svd(u, s, vt, r=cmp) # v.T[:,0:cmp]@np.diag(sinv[0:cmp])@u.T[0:cmp,:]
+    Ac = Y@X_pinv #compressed versions
     Lam,Xi = eig(A)
-    Lam = np.diag(np.abs(Lam))
+    Lam = np.diag(Lam)
     if bPlotEig: #Does the eigen-decomp ever show anything useful?
         #for ax,M in zip(axs[i,:],[u[:,0:cmp],np.diag(s[0:cmp]),v[0:cmp,:],A,Ac]):#,Lam,Xi.real,Xi.imag]):#[0,:]):
         for ax,M in zip(axs[i,:],[A,Ac,Lam,Xi.real,Xi.imag]):#[0,:]):
@@ -157,14 +167,15 @@ for i,ax in enumerate(axs):
     Y  = np.concatenate((dN,dF),axis=0) #The posteriors Y, are a composite of two coupled difference observations [dN;dF], e.g. the state of Y, hence the A matrix has 4x4 block form containing how Y evolves from each group of prior observations
     #print(X.shape,Y.shape)
     #Presume Y(posterior)=A(system transform)*X(prior), then Y=AUSV
-    u,s,v = svd(X,full_matrices=False) #full matrices=false, want to be able to compress, S has nonzero only
+    u,s,vt = svd(X,full_matrices=False) #full matrices=false, want to be able to compress, S has nonzero only
     #print(s)
     #print(u.shape,v.shape)
     x_deg = u.shape[0]//2
     #print(Y.shape,v.T[:,0:cmp].shape,u.T[0:cmp,:].shape)
-    sinv = 1./s #diagonal singular values, I guess vectorized
-    A = Y@v.T@np.diag(sinv)@u.T #Use SVD as pseudoinverse of X on Y to get system response
-    Ac = Y@v.T[:,0:cmp]@np.diag(sinv[0:cmp])@u.T[0:cmp,:] #compressed versions
+    X_pinv = pseudo_inverse_from_svd(u, s, vt) # v.T@np.diag(sinv)@u.T
+    A = Y@X_pinv #Use SVD as pseudoinverse of X on Y to get system response
+    X_pinv = pseudo_inverse_from_svd(u, s, vt, r=cmp) # v.T[:,0:cmp]@np.diag(sinv[0:cmp])@u.T[0:cmp,:]
+    Ac = Y@X_pinv #compressed versions
     #print(A[:,0:x_deg].shape)
     #I don't remember what this next comment block was doing
     '''Anorm1 = np.linalg.norm(A[:,0:x_deg],ord=2)
@@ -226,10 +237,10 @@ for i in range(nA):
     dF = F1-F0
     Y  = np.concatenate((dN,dF),axis=0) #The posteriors Y, are a composite of two coupled difference observations [dN;dF], e.g. the state of Y, hence the A matrix has 4x4 block form containing how Y evolves from each group of prior observations
     #It can be seen that the Y observation is X1-X0 while the X observation is X0. Thus the system behavior being trained is X1-X0 = A(X0). Given X0, the A propagator will yield X1-X0 and then X0. Perhaps this Y observation should be divided by the minor stride timestep to yield a proper first derivative approximate
-    u,s,v = svd(X,full_matrices=False) #full matrices=false, want to be able to compress, S has nonzero only
-    sinv = 1./s[0:cmp] #diagonal singular values, I guess vectorized
+    u,s,vt = svd(X,full_matrices=False) #full matrices=false, want to be able to compress, S has nonzero only
     #A = Y@v.T@np.diag(sinv)@u.T
-    Ac = Y@v.T[:,0:cmp]@np.diag(sinv)@u.T[0:cmp,:] #taking the 50% compression, this also seems to stabilise the approximation, maybe consider a study on the variation of this with integration accuracy
+    X_pinv = pseudo_inverse_from_svd(u, s, vt, r=cmp) # v.T[:,0:cmp]@np.diag(sinv[0:cmp])@u.T[0:cmp,:]
+    Ac = Y@X_pinv #taking the 50% compression, this also seems to stabilise the approximation, maybe consider a study on the variation of this with integration accuracy
     lAc.append(Ac) #this will contain a time evolution of differential propagators
     lTimes.append(ts[strt+i*major_stride+2*minor_stride]) #here I'm sampling times at the same rate (major_stride) such that I have time positions aligned with Ac transforms
 #print(lTimes[0])
