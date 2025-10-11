@@ -1,0 +1,165 @@
+Yes — I get the big picture and the specific steps you’re trying to do. Nice work: the script is a fairly complete pipeline that (in plain language) does the following:
+
+High-level intent (what you’re trying to do)
+
+Load a time series of 1-D BTE solutions (population npop and flux) from a pickle.
+
+Compress spatial fields with a local Legendre polynomial basis (project each snapshot to a low-dimensional coefficient vector).
+
+Build time-local linear operators (via SVD/pseudoinverse) that map a block of prior observations to the observed change (you treat Y = A X with Y = X1 − X0).
+
+Build an ensemble of these local propagators (some compressed version Ac) and store them as time-dependent propagators.
+
+Use those propagators to forward-integrate coefficients (forward Euler) to predict the fields between the sampled BTE solutions, compare with epoch averages (via measurement operator H), and (optionally) add a corrector that redistributes average errors back into coefficients.
+
+What each major block does (quick scan)
+
+block2: IO + quick contour plot of a subset of npop snapshots.
+
+block3: decompose_field + interp_temp + loadGinterpolants — compute Legendre coefficients for each snapshot and return a time-series list G.
+
+subsequent DMD-like loop: form matrices X and Y from consecutive coefficient blocks, compute SVD of X, compute A = Y X^{+} and a truncated Ac, eigen-decompose A for diagnostics.
+
+block4/block5: construct a 2-field model by concatenating N and F coefficient vectors and compute 2×1st-order transforms A that map [N0;F0] -> [dN;dF]. Visualize u,s,v, Ac, and A.
+
+block6: form a long list of compressed propagators lAc, then use them in a forward Euler loop in coefficient space to predict forward; use H to measure average temperature and attempt a corrector (mostly prototyped / commented).
+
+trailing comments: ideation about including boundary forcing BF and convolutional/GF style mappings.
+
+Concrete issues & suggestions (actions you can take now)
+I ran through the code and found a few small bugs/fragilities and a few conceptual improvements you’ll benefit from. I list them with short fixes you can drop into your script.
+
+decompose_field shape issues (likely bug)
+
+Problem: legvander returns V.shape = (N_points, deg+1). You build G = V.T @ V and b = V.T @ T. That’s fine, but you solve c = np.linalg.solve(G, b). If T is 1-D you get c as a 1-D array of length deg+1. Later you do G.append(c[:,0]) in loadGinterpolants which assumes c is 2-D. That will break or silently do the wrong thing.
+
+Fix: return a 1-D vector from decompose_field and append it directly. Prefer np.linalg.lstsq for numerical stability (avoids building Gram explicitly). Example replacement:
+
+def decompose_field(x, T, deg_x=12):
+    # x: 1D coords (will be rescaled inside), T: 1D field values
+    from numpy.polynomial.legendre import legvander
+    x_scaled = 2 * (x - x.min()) / (x.max() - x.min()) - 1
+    V = legvander(x_scaled, deg_x)    # shape (N_points, deg_x+1)
+    # Use least squares for stability
+    c, *_ = np.linalg.lstsq(V, T, rcond=1e-12)
+    return c  # shape (deg_x+1,)
+
+
+And in loadGinterpolants:
+
+c = decompose_field(x[100:1848], Fs.T[100:1848]*1e-9)
+G.append(c)   # not c[:,0]
+
+
+interp_temp usage / scaling
+
+legval expects x in [-1,1] if you built the basis on that interval. You have scale = lambda x: ... but some calls pass unscaled x. Make interp_temp require scaled coords or do the scaling inside it to avoid mistakes. Example:
+
+from numpy.polynomial.legendre import legval
+def interp_temp(x, c):
+    # x in physical coords -> scale internally
+    x_scaled = 2 * (x - x.min()) / (x.max() - x.min()) - 1
+    return legval(x_scaled, c)
+
+
+Robust SVD pseudoinverse & truncation
+
+Problem: you invert s directly with sinv = 1./s and then sometimes slice subsets. That’s okay but fragile if small singular values occur.
+
+Fix: use a tolerance and explicitly form truncated pseudoinverse. Example helper:
+
+def pseudo_inverse_from_svd(u, s, vt, r=None, tol=1e-12):
+    if r is None:
+        # choose rank by tol relative to max singular
+        r = np.sum(s > tol * s.max())
+    s_inv = np.zeros_like(s)
+    s_inv[:r] = 1.0 / s[:r]
+    return (vt.T * s_inv) @ u.T  # returns X^+ (shape matches)
+
+
+Then compute A = Y @ X_pinv.
+
+A vs Ac shapes and indexing
+
+Check axes when you slice u.T[0:cmp,:] vs u[:,0:cmp]. For compact truncated reconstruction you want:
+
+U_r = u[:, :r], S_r = s[:r], Vt_r = v[:r, :] (depending on numpy.linalg.svd output u,s,vt).
+
+Use the vt name (you used v) to avoid confusion: u, s, vt = svd(X, full_matrices=False).
+
+You probably want to divide Y by the time step (minor_stride)
+
+Currently Y = X1 - X0 — a difference. If the minor_stride is not 1 time unit or you want a derivative, divide by the time interval dt to get a proper rate. This will effect units of A and the Euler integration scaling.
+
+Scaling & units consistency
+
+You scale fields by 1e-9 in some places but not others. Decide on a single normalization and be consistent before SVD (SVD is scale-dependent). E.g. convert all physical fields to “natural” units once at load time.
+
+Measurement operator H and corrector
+
+H shape: you built H as (13,1) — make sure when you compute np.dot(H.T, c) your c slicing uses the same shape convention (columns vs rows). Use row vectors consistently or shape (n_coeffs,).
+
+When redistributing average error back to coefficients, consider computing a least-squares adjustment that minimally perturbs coefficients to achieve the desired H c = y. That is, solve min ||Δc|| s.t. H (c+Δc) = y → H Δc = y - H c → minimal norm solution Δc = H^+ (y - H c).
+
+Index/hardcoded lengths
+
+You have several hardcoded constants like 13647, 11, 12, and 1848. Replace with len(ts), deg_x+1, and x.size or compute from array shapes so the script is robust to different pickle sizes.
+
+Eigen decomposition use
+
+You do Lam,Xi = eig(A) then Lam = np.diag(np.abs(Lam)) — note that now Lam is a matrix of absolute-values of eigenvalues, not eigenvalues themselves. If you later expect Lam to be eigenvalues vector, that causes confusion. Prefer to keep eigenvalues as a 1-D array and only diag them when needed for visualization.
+
+Performance / memory
+
+You build many large matrices (stacking N0, F0 etc). With deg_x ~ 12 it's small, but check if npts and nA grow — memory should be fine for the numbers shown.
+
+Diagnostics to add (helpful plots/logging)
+
+Plot singular value spectra s for many X to choose truncation cmp more systematically.
+
+Check residual ||Y - A X||/||Y|| to see how well your local linear fits explain dynamics.
+
+Print/plot np.linalg.cond(X) or smallest singular values to detect ill-conditioning.
+
+Plot a few reconstructed fields from coefficients vs original to confirm the Legendre fit quality.
+
+Short example snippets you can use to replace fragile code
+
+safer SVD inversion + compute A:
+
+u, s, vt = svd(X, full_matrices=False)
+r = np.sum(s > 1e-8 * s.max())   # automatic rank
+X_pinv = (vt.T * (1.0 / s)) @ u.T   # full pseudo inverse (works if you don't truncate)
+# or truncated:
+r_trunc = min(cmp, r)
+X_pinv_trunc = (vt[:r_trunc, :].T * (1.0 / s[:r_trunc])) @ u[:, :r_trunc].T
+A = Y @ X_pinv_trunc
+
+
+least-squares redistribution of measurement error:
+
+# Want minimal norm Δc so that H @ (c + Δc) = y_target
+# Δc = H^+ (y_target - H @ c)
+H_vec = H.ravel()   # shape (n_coeffs,)
+residual = (y_target - H_vec.dot(c))
+# pseudo-inverse for H: H^+ = H / (H.H) if H is vector
+Hp = H_vec / (H_vec.dot(H_vec) + 1e-12)
+delta_c = Hp * residual
+c_new = c + delta_c
+
+
+Final bottom-line
+
+You are doing the right conceptual thing: compress modes with Legendre polynomials, learn local linear operators mapping priors to changes, and integrate forward in coefficient space. The idea of matching epoch averages via a measurement operator H is sensible.
+
+The main fixes needed are shape consistency for coefficient vectors, more stable linear algebra (use lstsq / robust pseudoinverse with truncation), consistent scaling/units, and careful handling of time-step normalization.
+
+With those fixes, add diagnostics (singular value plots and residual norms) so you can pick cmp, deg_x, npts, and stride values in an evidence-based way.
+
+If you want I can:
+
+produce a cleaned-up, corrected version of the critical functions (decompose_field, loadGinterpolants, SVD→A computation, forward Euler) with the fixes integrated, or
+
+run through a couple of the failure modes you might currently see (shape errors, NaNs, bad fits) and show exact code changes to fix them.
+
+Which would you prefer? (I'll just produce the corrected code right away if you'd like — no need to wait.)
