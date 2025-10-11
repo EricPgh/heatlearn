@@ -93,7 +93,9 @@ def pseudo_inverse_from_svd(u, s, vt, r=None, tol=1e-12):
         r = np.sum(s > tol * s.max())
     s_inv = np.zeros_like(s)
     s_inv[:r] = 1.0 / s[:r]
-    return (vt.T * s_inv) @ u.T  # returns X^+ (shape matches)
+    #U_r = u[:, :r], S_r = s[:r], Vt_r = v[:r, :] (depending on numpy.linalg.svd output u,s,vt).
+    #v.T[:,0:cmp]@np.diag(sinv[0:cmp])@u.T[0:cmp,:]
+    return (vt.T[:, :r] * s_inv) @ u.T[:r, :]  # returns X^+ (shape matches)
 
 G,time_slice = loadGinterpolants(ts, npop, 20)
 ts_short=ts[time_slice]
