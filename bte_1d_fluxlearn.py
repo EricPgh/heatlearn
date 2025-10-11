@@ -15,7 +15,11 @@ bPlot=True
 bPlotEig=False
 L=1e-3
 Nx=2048
+Linert = 100
+Rinert = 100
+Mactive = Nx-Linert-Rinert
 x = np.linspace(0.0, L, Nx)
+xcenter = x[Linert:Mactive]
 with open("bte_1d_flux.pkl", "rb") as f:
     ts, npop, flux = pickle.load(f)
 #flux*=1000.
@@ -72,12 +76,12 @@ def loadGinterpolants(ts, field, nevery, bPlot=False):
     ts_short = ts[time_slice]
     Fshort = field[time_slice]
     for Fs in Fshort:
-        c=decompose_field(x[100:1848],Fs.T[100:1848]*1e-9)
+        c=decompose_field(xcenter,Fs.T[Linert:Mactive]*1e-9)
         G.append(c) #unnecessary [:,0])
         if bPlot: #Plot efficiency of Legendre interpolation
-            F = interp_temp(x[100:1848],c)
-            plt.plot(x[100:1848] * 1e6,F)
-            plt.plot(x[100:1848] * 1e6,Fs.T[100:1848]*1e-9,'o',markevery=100)
+            F = interp_temp(xcenter,c)
+            plt.plot(xcenter * 1e6,F)
+            plt.plot(xcenter * 1e6,Fs.T[Linert:Mactive]*1e-9,'o',markevery=100)
     if bPlot: #Plot efficiency of Legendre interpolation
         plt.savefig('bte_temps_interp.png')
         plt.show()
@@ -246,19 +250,19 @@ for i in range(nA):
 #print(lTimes[0])
 
 #With propagators formed, here begins the forward euler loop. this is intended to operate between large strides in the pickle solutions, starting with the beginning conditions of one stride and matching the final solutions (from BTE) at the end of the stride
-Nstart=npop[0].T[100:1848] #population profile from the start
-Fstart=flux[0].T[100:1848] #flux profile from the start
-n0=decompose_field(x[100:1848],Nstart*1e-9) #Decompose the inside layer only, scale the temperature to natural units
-f0=decompose_field(x[100:1848],Fstart*1e-9) #Decompose the inside layer only, scale the temperature to natural units
+Nstart=npop[0].T[Linert:Mactive] #population profile from the start
+Fstart=flux[0].T[Linert:Mactive] #flux profile from the start
+n0=decompose_field(xcenter,Nstart*1e-9) #Decompose the inside layer only, scale the temperature to natural units
+f0=decompose_field(xcenter,Fstart*1e-9) #Decompose the inside layer only, scale the temperature to natural units
 print(n0.shape,f0.shape)
 c0=np.concatenate((n0,f0),axis=0)
 print(c0.shape)
 nflux=np.concatenate((npop,flux),axis=0)
 Nn = n0.shape[0]
 #print(c0)
-#Tappx = interp_temp(x[100:1848],c0)
+#Tappx = interp_temp(xcenter,c0)
 #print(Tappx)
-#plt.plot(x[100:1848] * 1e6,Tappx)
+#plt.plot(xcenter * 1e6,Tappx)
 #print(c)
 nepoch=10 #I'm defining each epoch to be the period I'm running parallel integration alongside BTE solutions. Comparison happens at the epoch end. 
 time_slice =np.linspace(100,5000,nepoch,dtype=int) #these i values are the epoch end points, so the first epoch runs 
@@ -283,7 +287,7 @@ t_0 = 0.
 colormap = plt.get_cmap('tab10', nepoch)
 colors = [colormap(k) for k in range(nepoch)] #when plotting exact vs approx curves, each epoch has own color from cmap
 for t, Cs, col in zip(ts[time_slice],nflux[time_slice],colors):#[0:1]: 10 elements to loop, epochs
-    Navg = np.dot(H.T,decompose_field(x[100:1848],Cs[:Nn].T[100:1848]*1e-9)) #Ts is the BTE solution and this operation with H measures the average T at the epoch start
+    Navg = np.dot(H.T,decompose_field(xcenter,Cs[:Nn].T[Linert:Mactive]*1e-9)) #Ts is the BTE solution and this operation with H measures the average T at the epoch start
     while lTimes[i]<t: #lTimes was recorded during formation of the propagators, this is the within-epoch integration loop that runs until the time value of the propagator reaches t, the epoch end
         '''if i<7: #debugging
             print(lAc[i])
@@ -316,8 +320,8 @@ for t, Cs, col in zip(ts[time_slice],nflux[time_slice],colors):#[0:1]: 10 elemen
         #print(c)
         i+=1
     #print(i)
-    plt.plot(x[100:1848] * 1e6,interp_temp(x[100:1848],c1[:Nn]),color=col)
-    plt.plot(x[100:1848] * 1e6,Cs[:Nn].T[100:1848]*1e-9,'o',color=col,markevery=100)
+    plt.plot(xcenter * 1e6,interp_temp(xcenter,c1[:Nn]),color=col)
+    plt.plot(xcenter * 1e6,Cs[:Nn].T[Linert:Mactive]*1e-9,'o',color=col,markevery=100)
     Navg_0 = Navg #Also part of an in-process corrector mechanism.
     t_0 = t
     #break
