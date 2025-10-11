@@ -72,14 +72,14 @@ def interp_temp(x,c):
     return legval(x_scaled, c,tensor=False) #np.sin(np.pi * x / Lx)  # W/m²
 #deprecated scale = lambda x: 2 * (x - x.min()) / (x.max() - x.min()) - 1
 
-def loadGinterpolants(ts, field, nevery, bPlot=False):
+def loadGinterpolants(ts, field, nevery, deg_x=12, bPlot=False):
     G = [] #This is a list of Legendre coefficients every n'th time point
     time_slice = np.arange(0,len(ts)+1,nevery,dtype=int)
     #time_slice = np.linspace(1,len(ts),20,dtype=int)
     ts_short = ts[time_slice]
     Fshort = field[time_slice]
     for Fs in Fshort:
-        c=decompose_field(xcenter,Fs.T[Linert:Mactive])
+        c=decompose_field(xcenter,Fs.T[Linert:Mactive], deg_x)
         G.append(c) #unnecessary [:,0])
         if bPlot: #Plot efficiency of Legendre interpolation
             F = interp_temp(xcenter,c)
@@ -103,7 +103,8 @@ def pseudo_inverse_from_svd(u, s, vt, r=None, tol=1e-12):
     #v.T[:,0:cmp]@np.diag(sinv[0:cmp])@u.T[0:cmp,:]
     return (vt.T[:, :r] * s_inv) @ u.T[:r, :]  # returns X^+ (shape matches)
 
-G,time_slice = loadGinterpolants(ts, npop, 20)
+deg_Leg = 12
+G,time_slice = loadGinterpolants(ts, npop, 20, deg_Leg)
 ts_short=ts[time_slice]
 #print(np.array(G))
 #This next section is a first order attempt to visualize the system and eigenvalues, it has yet to be interesting
@@ -147,8 +148,8 @@ for i in range(len(G)-npts):
         plt.show()
 
 #block4
-GN,time_slice = loadGinterpolants(ts, npop, 1)
-GF,time_slice = loadGinterpolants(ts, flux, 1)
+GN,time_slice = loadGinterpolants(ts, npop, 1, deg_Leg)
+GF,time_slice = loadGinterpolants(ts, flux, 1, deg_Leg)
 
 #block5
 #print(np.array(G))
@@ -261,8 +262,8 @@ for i in range(nA):
 #With propagators formed, here begins the forward euler loop. this is intended to operate between large strides in the pickle solutions, starting with the beginning conditions of one stride and matching the final solutions (from BTE) at the end of the stride
 Nstart=npop[0].T[Linert:Mactive] #population profile from the start
 Fstart=flux[0].T[Linert:Mactive] #flux profile from the start
-n0=decompose_field(xcenter,Nstart) #Decompose the inside layer only, scale the temperature to natural units
-f0=decompose_field(xcenter,Fstart) #Decompose the inside layer only, scale the temperature to natural units
+n0=decompose_field(xcenter,Nstart,deg_Leg) #Decompose the inside layer only, scale the temperature to natural units
+f0=decompose_field(xcenter,Fstart,deg_Leg) #Decompose the inside layer only, scale the temperature to natural units
 print(n0.shape,f0.shape)
 c0=np.concatenate((n0,f0),axis=0)
 print(c0.shape)
@@ -279,13 +280,18 @@ time_slice =np.linspace(100,5000,nepoch,dtype=int) #these i values are the epoch
 #Notably I reused the list time_slice here. Previously it was returned by the loadGinterpolants(1) call and had a facile step of 1, here its being reused to define the epoch stepping
 
 #I expect there to be some variation of forward euler with actual BTE. I'm defining here, with chatGPT guidance, a measurement operator H that is responsible for computing the measurement (Tavg) that can be compared to the BTE epoch measurement
-H = np.array([1,0.,1,0.,1,0.,1,0.,1,0.,1,0.,1],dtype=float).reshape((13,1)) #Average of Legendre polynomial is the sum of even Pn coefficients, c0+c2+c4...
+avg_weights = [1.]
+for _ in range(deg_Leg//2):
+    avg_weights += [0.,1.]
+if deg_Leg%2 ~= 0:
+    avg_weights += [0.]
+H = np.array(avg_weights,dtype=float).reshape((deg_Leg+1,1)) #Average of Legendre polynomial is the sum of even Pn coefficients, c0+c2+c4...
 
 #This is maybe a less useful attempt. If I know what Tavg is at the end of each epoch by BTE, and the integration Tavg (by opeator H) is off by some difference, that difference (an integration quantity) needs to be distributed back to the Legendre coefficients before initiating the next epoch. This will ensure that Tavg matches between BTE and forward euler (FE) between epochs. This doesn't ensure the T profile will match. In some way should the H operator pseudoinversion matter? Or the current magnitudes of the Legendre coefficients be the weights for redistribution? The incorporation or implementation of the integration corrector is yet undefined and deserves consideration.
 n = 2
-spread = H/np.array([1,1,2,1,3,1,4,1,5,1,6,1,7],dtype=float).reshape((13,1))**n
+spread = H/np.array([1,1,2,1,3,1,4,1,5,1,6,1,7],dtype=float).reshape((deg_Leg+1,1))**n
 Hp = spread/sum(spread)
-#Hp = np.array([1,0,0,0,0,0,0,0,0,0,0,0,0],dtype=float).reshape((13,1))
+#Hp = np.array([1,0,0,0,0,0,0,0,0,0,0,0,0],dtype=float).reshape((deg_Leg+1,1))
 #print(Hp)
 
 #Begin integration
@@ -321,6 +327,18 @@ for t, Cs, col in zip(ts[time_slice],nflux[time_slice],colors):#[0:1]: 10 elemen
             Hp = c1/norm #This seems reasonable in that the magnitude of the current solution vector elements should guide the distribution of the updates. Reasonable as first cut but not rigorous or empirically validated.
             #print(Hp)
             c1+=Hp*(y-Hf)
+            #ChatGPT suggests this method under the idea that the vector update should be minimized.
+            '''least-squares redistribution of measurement error:
+
+            # Want minimal norm Δc so that H @ (c + Δc) = y_target
+            # Δc = H^+ (y_target - H @ c)
+            H_vec = H.ravel()   # shape (n_coeffs,)
+            residual = (y_target - H_vec.dot(c))
+            # pseudo-inverse for H: H^+ = H / (H.H) if H is vector
+            Hp = H_vec / (H_vec.dot(H_vec) + 1e-12)
+            delta_c = Hp * residual
+            c_new = c + delta_c'''
+
         c0=c1 #update c_i solutions
         if False and i%100==0:
             #print(c2.T)
