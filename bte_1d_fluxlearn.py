@@ -168,9 +168,9 @@ for i,ax in enumerate(axs):
     #Here Y is defined as the rate of change of observations. Alternatively could use just an observation of the system, but the physics being studied are nonlinear second order ODE (or nonlinear system of two first order ODE)
     N1 = np.array(GN[strt+i*major_stride+minor_stride:strt+i*major_stride+npts*minor_stride+minor_stride:minor_stride]).T
     F1 = np.array(GF[strt+i*major_stride+minor_stride:strt+i*major_stride+npts*minor_stride+minor_stride:minor_stride]).T
-    dN = N1-N0
-    dF = F1-F0
-    Y  = np.concatenate((dN,dF),axis=0) #The posteriors Y, are a composite of two coupled difference observations [dN;dF], e.g. the state of Y, hence the A matrix has 4x4 block form containing how Y evolves from each group of prior observations
+    dN = (N1-N0)/minor_stride
+    dF = (F1-F0)/minor_stride
+    Y  = np.concatenate((dN,dF),axis=0) #The posteriors Y, are a composite of two coupled difference observations [dN/dt;dF/dt], e.g. the state of Y, hence the A matrix has 4x4 block form containing how Y evolves from each group of prior observations
     #print(X.shape,Y.shape)
     #Presume Y(posterior)=A(system transform)*X(prior), then Y=AUSV
     u,s,vt = svd(X,full_matrices=False) #full matrices=false, want to be able to compress, S has nonzero only
@@ -239,10 +239,10 @@ for i in range(nA):
     #Here Y is defined as the rate of change of observations. Alternatively could use just an observation of the system, but the physics being studied are nonlinear second order ODE (or nonlinear system of two first order ODE)
     N1 = np.array(GN[strt+i*major_stride+minor_stride:strt+i*major_stride+npts*minor_stride+minor_stride:minor_stride]).T
     F1 = np.array(GF[strt+i*major_stride+minor_stride:strt+i*major_stride+npts*minor_stride+minor_stride:minor_stride]).T
-    dN = N1-N0
-    dF = F1-F0
-    Y  = np.concatenate((dN,dF),axis=0) #The posteriors Y, are a composite of two coupled difference observations [dN;dF], e.g. the state of Y, hence the A matrix has 4x4 block form containing how Y evolves from each group of prior observations
-    #It can be seen that the Y observation is X1-X0 while the X observation is X0. Thus the system behavior being trained is X1-X0 = A(X0). Given X0, the A propagator will yield X1-X0 and then X0. Perhaps this Y observation should be divided by the minor stride timestep to yield a proper first derivative approximate
+    dN = (N1-N0)/minor_stride
+    dF = (F1-F0)/minor_stride
+    Y  = np.concatenate((dN,dF),axis=0) #The posteriors Y, are a composite of two coupled difference observations [dN/dt;dF/dt], e.g. the state of Y, hence the A matrix has 4x4 block form containing how Y evolves from each group of prior observations
+    #It can be seen that the Y observation is X1-X0 while the X observation is X0. Thus the system behavior being trained is X1-X0 = A(X0). Given X0, the A propagator will yield X1-X0 and then X0. This Y observation is divided by the minor stride timestep to yield a proper first derivative approximate
     u,s,vt = svd(X,full_matrices=False) #full matrices=false, want to be able to compress, S has nonzero only
     #A = Y@v.T@np.diag(sinv)@u.T
     X_pinv = pseudo_inverse_from_svd(u, s, vt, r=cmp) # v.T[:,0:cmp]@np.diag(sinv[0:cmp])@u.T[0:cmp,:]
@@ -297,8 +297,8 @@ for t, Cs, col in zip(ts[time_slice],nflux[time_slice],colors):#[0:1]: 10 elemen
             break'''
         #The process is as such, the prior solution n0 and f0 are stacked and multiplied with current Ac (i'th) to provide dc(:=c1-c0)
         dc = lAc[i]@c0
-        #however this difference is only over the minor stride interval, but we are counting by major strides, so the difference, dc, needs to be scaled by major_stride/minor_stride to predict the increase of c2 over c1 when major_stride had elapsed
-        c1=c0+ (major_stride/minor_stride)*dc #e.g. +12*dc
+        #however this difference is normalized by the minor stride interval (first deriv appx), but we are counting by major strides, so the difference, dc, needs to be scaled by major_stride to predict the increase of c2 over c1 when major_stride had elapsed
+        c1=c0+ major_stride*dc #e.g. +12*dc
         #print(c2)
         if False: #initial attempt to implement corrector. not sure why I was trying to do it within the epoch when I think by design I won't know Tavg except at epoch boundaries. I was having initial difficulties that I was attributing to integration errors and falsely though correctors were needed already. Final working prototype left the final line (c2+=Hp*(y-Hf)) commented and unused. but this workflow essential shows the chatGPT suggested process of distributing the error back into the coefficients by some operator Hp.
             Hf = np.dot(H.T,c1[Nn,:])
@@ -356,19 +356,19 @@ if False:
     F0 = np.array(GF[strt+i*major_stride  :strt+i*major_stride+npts*minor_stride  :minor_stride]).T
     #print(X0.shape,X1.shape)
     X  = np.concatenate((N0,F0),axis=0)
-    #Again using the change as the posterior, this should produce dY=A(X0) or the relation between change and priors
-    dN1  = np.array(GN[strt+i*major_stride+minor_stride:strt+i*major_stride+npts*minor_stride+minor_stride:minor_stride]).T-N0
-    dF1  = np.array(GF[strt+i*major_stride+minor_stride:strt+i*major_stride+npts*minor_stride+minor_stride:minor_stride]).T-F0
+    #Again using the change as the posterior, this should produce dY/dt=A(X0) or the relation between change and priors
+    dN1  = (np.array(GN[strt+i*major_stride+minor_stride:strt+i*major_stride+npts*minor_stride+minor_stride:minor_stride]).T-N0)/minor_stride
+    dF1  = (np.array(GF[strt+i*major_stride+minor_stride:strt+i*major_stride+npts*minor_stride+minor_stride:minor_stride]).T-F0)/minor_stride
     Y  = np.concatenate((dN1,dF1),axis=0)
-    #It can be seen that the Y observation is X1-X0 while the X observations are 0'th values of fields N and F. Thus the system behavior being trained is X1-X0 = A(X0). Given X0, the A propagator will yield X1-X0 and then X1. Again this Y observation maybe should be divided by the minor stride timestep to yield a proper first derivative approximate, but thats unity anyway. The value of this formulation as a tracking of two coupled fields is because the internal F field, decomposed into the GF observations, are dependent on the N field as well as the boundary values of F. I would like to extend this version one step further to contain boundary values like such:
+    #It can be seen that the Y observation is (X1-X0)/dt while the X observations are 0'th values of fields N and F. Thus the system behavior being trained is (X1-X0)/dt = A(X0). Given X0, the A propagator will yield X1-X0 and then X1. Again this Y observation is divided by the minor stride timestep to yield a proper first derivative approximate. The value of this formulation as a tracking of two coupled fields is because the internal F field, decomposed into the GF observations, are dependent on the N field as well as the boundary values of F. I would like to extend this version one step further to contain boundary values like such:
     N0 = np.array(GN[strt+i*major_stride  :strt+i*major_stride+npts*minor_stride  :minor_stride]).T
     F0 = np.array(GF[strt+i*major_stride  :strt+i*major_stride+npts*minor_stride  :minor_stride]).T
     BF = np.array([1,0,0,0])#?
     #print(X0.shape,X1.shape)
     X  = np.concatenate((N0,F0,BF),axis=0)
-    #Again using the change as the posterior, this should produce dY=A(X0;BF) or the relation between change and priors
-    dN1  = np.array(GN[strt+i*major_stride+minor_stride:strt+i*major_stride+npts*minor_stride+minor_stride:minor_stride]).T-N0
-    dF1  = np.array(GF[strt+i*major_stride+minor_stride:strt+i*major_stride+npts*minor_stride+minor_stride:minor_stride]).T-F0
+    #Again using the change as the posterior, this should produce dY/dt=A(X0;BF) or the relation between change and priors
+    dN1  = (np.array(GN[strt+i*major_stride+minor_stride:strt+i*major_stride+npts*minor_stride+minor_stride:minor_stride]).T-N0)/minor_stride
+    dF1  = (np.array(GF[strt+i*major_stride+minor_stride:strt+i*major_stride+npts*minor_stride+minor_stride:minor_stride]).T-F0)/minor_stride
     Y  = np.concatenate((dN1,dF1),axis=0)
 
     #I know there does exist a linear transform (Greens function style) such that F=G*BF. And I have demonstrated this with basic thermal fields (Fourier eq) in 2D. However in this case the domain is 1D and I am predicting dF(t)=G*BF(t). These matrices N0 and F0 are multiple prior observations that evolve into multiple posterior observations. What is BF in that space?  #The time varying greens function method applies a kernel to the input history by convolution which is also a linear process. Therefore the same method to develop the transform matrix should admit a convolution operation.
