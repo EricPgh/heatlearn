@@ -18,6 +18,7 @@ Nx=2048
 x = np.linspace(0.0, L, Nx)
 with open("bte_1d_flux.pkl", "rb") as f:
     ts, npop, flux = pickle.load(f)
+#flux*=1000.
 if bPlot:# Just a little plotting of as-loaded contours
     mpl.rcParams.update({"figure.figsize": (7, 4)})
     time_slice = np.linspace(1,13646,20,dtype=int)
@@ -189,7 +190,7 @@ fig, axs = plt.subplots(nA,1,figsize=(8,12))
 
 print(len(lAc))
 for ax,i in zip(axs, list(range(0,nA))):#len(lAc),100))[:9]):
-    im = ax.imshow(lAc[i], cmap='hot', vmin=-15,vmax=5,
+    im = ax.imshow(lAc[i], cmap='hot', #vmin=-15,vmax=5,
            origin='upper', interpolation='nearest', aspect='equal')
     fig.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
 plt.tight_layout()
