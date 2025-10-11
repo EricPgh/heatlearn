@@ -111,11 +111,12 @@ if bPlotEig:
     fig, axs = plt.subplots(9,5,figsize=(8,12))
 Gt = [] #This contains slices of the G list, DMD/SVD uses blocks of consecutive observations
 print(len(G))
+npts = 11
 cmp=11 #fidelity level (vice compression), how many singular values to keep
-for i in range(len(G)-11):
-    Gt.append(G[i:11+i]) #each element contains a block slice of G
-    X = np.array(G[i:11+i]) #DMD considers the prior grouping of observations
-    Y = np.array(G[i+1:12+i]) #DMD measures the system by its evolution to posterior observations
+for i in range(len(G)-npts):
+    Gt.append(G[i:npts+i]) #each element contains a block slice of G
+    X = np.array(G[i:npts+i]) #DMD considers the prior grouping of observations
+    Y = np.array(G[i+1:npts+1+i]) #DMD measures the system by its evolution to posterior observations
     #print(X.shape,Y.shape)
     #Presume Y(posterior)=A(system transform)*X(prior), then Y=AUSV
     u,s,vt = svd(X,full_matrices=False) #full matrices=false, want to be able to compress, S has nonzero only
