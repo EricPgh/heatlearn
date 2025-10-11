@@ -50,18 +50,20 @@ def decompose_field(x,T):
     deg_x = 12
     V = legvander(x_scaled, deg_x)  # shape: (N_points)
     
+    #The following least-squares call performs this task:
     # Project via inner product (or least-squares)
     # Result is vector of length (deg_x + 1)*(deg_y + 1)
     # Project T_flat onto the Legendre basis
-    G = V.T @ V           # Gram matrix
-    #print(V.shape,T.shape)
-    b = V.T @ T           # Unnormalized projection
-    c = np.linalg.solve(G, b)  # Solve for coefficients
-    return c
+    #G = V.T @ V           # Gram matrix
+    #b = V.T @ T           # Unnormalized projection
+    #c = np.linalg.solve(G, b)  # Solve for coefficients
+    c, *_ = np.linalg.lstsq(V, T, rcond=1e-12)
+    return c  # shape (deg_x+1,)
 def interp_temp(x,c):
     from numpy.polynomial.legendre import legval
-    return legval(x, c,tensor=False) #np.sin(np.pi * x / Lx)  # W/m²
-scale = lambda x: 2 * (x - x.min()) / (x.max() - x.min()) - 1
+    x_scaled = 2 * (x - x.min()) / (x.max() - x.min()) - 1
+    return legval(x_scaled, c,tensor=False) #np.sin(np.pi * x / Lx)  # W/m²
+#deprecated scale = lambda x: 2 * (x - x.min()) / (x.max() - x.min()) - 1
 
 def loadGinterpolants(ts, field, nevery, bPlot=False):
     G = [] #This is a list of Legendre coefficients every n'th time point
@@ -71,9 +73,9 @@ def loadGinterpolants(ts, field, nevery, bPlot=False):
     Fshort = field[time_slice]
     for Fs in Fshort:
         c=decompose_field(x[100:1848],Fs.T[100:1848]*1e-9)
-        G.append(c[:,0])
+        G.append(c) #unnecessary [:,0])
         if bPlot: #Plot efficiency of Legendre interpolation
-            F = interp_temp(scale(x[100:1848]),c)
+            F = interp_temp(x[100:1848],c)
             plt.plot(x[100:1848] * 1e6,F)
             plt.plot(x[100:1848] * 1e6,Fs.T[100:1848]*1e-9,'o',markevery=100)
     if bPlot: #Plot efficiency of Legendre interpolation
@@ -243,7 +245,7 @@ print(c0.shape)
 nflux=np.concatenate((npop,flux),axis=0)
 Nn = n0.shape[0]
 #print(c0)
-#Tappx = interp_temp(scale(x[100:1848]),c0)
+#Tappx = interp_temp(x[100:1848],c0)
 #print(Tappx)
 #plt.plot(x[100:1848] * 1e6,Tappx)
 #print(c)
@@ -303,7 +305,7 @@ for t, Cs, col in zip(ts[time_slice],nflux[time_slice],colors):#[0:1]: 10 elemen
         #print(c)
         i+=1
     #print(i)
-    plt.plot(x[100:1848] * 1e6,interp_temp(scale(x[100:1848]),c1[:Nn]),color=col)
+    plt.plot(x[100:1848] * 1e6,interp_temp(x[100:1848],c1[:Nn]),color=col)
     plt.plot(x[100:1848] * 1e6,Cs[:Nn].T[100:1848]*1e-9,'o',color=col,markevery=100)
     Navg_0 = Navg #Also part of an in-process corrector mechanism.
     t_0 = t
