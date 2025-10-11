@@ -23,7 +23,10 @@ x = np.linspace(0.0, L, Nx)
 xcenter = x[Linert:Mactive]
 with open("bte_1d_flux.pkl", "rb") as f:
     ts, npop, flux = pickle.load(f) #next time I should have x, xcenter come through the pickle
-#flux*=1000.
+npop *= 1e-9 #Scaling to natural dimension
+Nunits = '[1e9]'
+flux *= 1e-6
+Funits = '[1e6]'
 if bPlot:# Just a little plotting of as-loaded contours
     mpl.rcParams.update({"figure.figsize": (7, 4)})
     time_slice = np.linspace(1,len(ts),20,dtype=int)
@@ -33,12 +36,12 @@ if bPlot:# Just a little plotting of as-loaded contours
     #for Ts in Tsnaps:#[np.array([1,6,-1])]:
         plt.plot(x , Ns.T)#, label="?(x, t_final)")
     plt.xlabel(f"x [{Lunits}]")
-    #plt.ylabel("temperature perturbation ? [K]")
+    plt.ylabel(f"{Nunits}")
     plt.title("1D Inventory from Upwind BTE")
     #plt.legend()
     plt.tight_layout()
     plt.xlim(0,L)
-    plt.ylim(0,1e8)
+    plt.ylim(0,1.)
     plt.savefig('bte_temps_as-is.png')
     plt.show()
 
@@ -77,15 +80,16 @@ def loadGinterpolants(ts, field, nevery, bPlot=False):
     ts_short = ts[time_slice]
     Fshort = field[time_slice]
     for Fs in Fshort:
-        c=decompose_field(xcenter,Fs.T[Linert:Mactive]*1e-9)
+        c=decompose_field(xcenter,Fs.T[Linert:Mactive])
         G.append(c) #unnecessary [:,0])
         if bPlot: #Plot efficiency of Legendre interpolation
             F = interp_temp(xcenter,c)
             plt.plot(xcenter ,F)
-            plt.plot(xcenter ,Fs.T[Linert:Mactive]*1e-9,'o',markevery=100)
+            plt.plot(xcenter ,Fs.T[Linert:Mactive],'o',markevery=100)
     if bPlot: #Plot efficiency of Legendre interpolation
         plt.xlim(0,L)
         plt.xlabel(f"x [{Lunits}]")
+        plt.ylabel(f"{Lunits}")
         plt.savefig('bte_temps_interp.png')
         plt.show()
     return G,time_slice
@@ -131,13 +135,13 @@ for i in range(len(G)-11):
             im = ax.imshow(M, cmap='hot', vmin=-.2,vmax=.2,
                    origin='upper', interpolation='nearest', aspect='equal')
             ax.set_xlim(0,L)
-            ax.set_ylim(0,1e-1)
+            ax.set_ylim(0,1.)
         fig.savefig('bte_temps_eigs.png')
         fig.show()
         fig.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
         #plt.title(f'Green\'s Function after {Nt} steps')
         #plt.xlabel(f"x [{Lunits}]")
-        #plt.ylabel('y (m)')
+        #plt.ylabel(f'{Nunits}')
         plt.tight_layout()
         #plt.savefig('matrix_evolution.png')
         plt.show()
@@ -257,8 +261,8 @@ for i in range(nA):
 #With propagators formed, here begins the forward euler loop. this is intended to operate between large strides in the pickle solutions, starting with the beginning conditions of one stride and matching the final solutions (from BTE) at the end of the stride
 Nstart=npop[0].T[Linert:Mactive] #population profile from the start
 Fstart=flux[0].T[Linert:Mactive] #flux profile from the start
-n0=decompose_field(xcenter,Nstart*1e-9) #Decompose the inside layer only, scale the temperature to natural units
-f0=decompose_field(xcenter,Fstart*1e-9) #Decompose the inside layer only, scale the temperature to natural units
+n0=decompose_field(xcenter,Nstart) #Decompose the inside layer only, scale the temperature to natural units
+f0=decompose_field(xcenter,Fstart) #Decompose the inside layer only, scale the temperature to natural units
 print(n0.shape,f0.shape)
 c0=np.concatenate((n0,f0),axis=0)
 print(c0.shape)
@@ -292,7 +296,7 @@ t_0 = 0.
 colormap = plt.get_cmap('tab10', nepoch)
 colors = [colormap(k) for k in range(nepoch)] #when plotting exact vs approx curves, each epoch has own color from cmap
 for t, Cs, col in zip(ts[time_slice],nflux[time_slice],colors):#[0:1]: 10 elements to loop, epochs
-    Navg = np.dot(H.T,decompose_field(xcenter,Cs[:Nn].T[Linert:Mactive]*1e-9)) #Ts is the BTE solution and this operation with H measures the average T at the epoch start
+    Navg = np.dot(H.T,decompose_field(xcenter,Cs[:Nn].T[Linert:Mactive])) #Ts is the BTE solution and this operation with H measures the average T at the epoch start
     while lTimes[i]<t: #lTimes was recorded during formation of the propagators, this is the within-epoch integration loop that runs until the time value of the propagator reaches t, the epoch end
         '''if i<7: #debugging
             print(lAc[i])
@@ -326,13 +330,14 @@ for t, Cs, col in zip(ts[time_slice],nflux[time_slice],colors):#[0:1]: 10 elemen
         i+=1
     #print(i)
     plt.plot(xcenter ,interp_temp(xcenter,c1[:Nn]),color=col)
-    plt.plot(xcenter ,Cs[:Nn].T[Linert:Mactive]*1e-9,'o',color=col,markevery=100)
+    plt.plot(xcenter ,Cs[:Nn].T[Linert:Mactive],'o',color=col,markevery=100)
     Navg_0 = Navg #Also part of an in-process corrector mechanism.
     t_0 = t
     #break
 plt.xlim(0.,L)
-plt.ylim(0.0,0.101)
+plt.ylim(0.0,1.01)
 plt.xlabel(f"x [{Lunits}]")
+plt.ylabel(f"[{Nunits}]")
 plt.savefig('bte_predictor_performance.png')
 plt.show()
 
@@ -349,7 +354,7 @@ if False: #Just rying to see patterns in the transform
     fig.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
     #plt.title(f'Green\'s Function after {Nt} steps')
     #plt.xlabel(f"x [{Lunits}]")
-    #plt.ylabel('y (m)')
+    #plt.ylabel(f'{Nunits}')
     plt.tight_layout()
     #plt.savefig('matrix_evolution.png')
     plt.show()
