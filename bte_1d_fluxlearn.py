@@ -336,8 +336,34 @@ for t, Cs, col in zip(ts[time_slice],nflux[time_slice],colors):#[0:1]: 10 elemen
             # pseudo-inverse for H: H^+ = H / (H.H) if H is vector
             Hp = H_vec / (H_vec.dot(H_vec) + 1e-12)
             delta_c = Hp * residual
-            c_new = c + delta_c'''
-
+            c_new = c + delta_c
+            I do think this is too simplistic. It may develop oscillitory modes about the average.
+            Other suggestions are minimizations of the update with hand tweaking. Another is Mahalanobis-style:
+            Weighted (Mahalanobis) minimal-norm correction
+            
+            If you have prior knowledge of coefficient variances (covariance C), use
+            \min \Delta c^T C^{-1} \Delta c\quad\text{s.t. } H\Delta c = r,
+            leading to
+            \Delta c = C H^T (H C H^T)^{-1} r.
+            This will distribute correction across coefficients according to the covariance -- useful if some coefficients are known to be more trustworthy or you want to penalize changing high-frequency coefficients more strongly. An example snippet:
+            import numpy as np
+            
+            # Suppose you have prior coefficient realizations: shape (N, n_c)
+            C_samples = np.array([...])  # each row is c^(k)
+            
+            # Sample covariance
+            C = np.cov(C_samples, rowvar=False)
+            
+            # Regularization with Ledoit–Wolf style that uses lambda to blend diagonal and off-diagonal to improve C condition.
+            lam = 1e-6 * np.trace(C) / C.shape[0]
+            C_reg = (1 - 0.1) * C + 0.1 * np.diag(np.diag(C)) + lam * np.eye(C.shape[0])
+            
+            # Then compute correction
+            H = ...  # your measurement operator, shape (m, n_c)
+            r = ...  # residual vector (y_target - H @ c_pred)
+            
+            Delta_c = C_reg @ H.T @ np.linalg.inv(H @ C_reg @ H.T) @ r'''
+            
         c0=c1 #update c_i solutions
         if False and i%100==0:
             #print(c2.T)
@@ -354,7 +380,7 @@ for t, Cs, col in zip(ts[time_slice],nflux[time_slice],colors):#[0:1]: 10 elemen
 plt.xlim(0.,L)
 plt.ylim(0.0,1.01)
 plt.xlabel(f"x [{Lunits}]")
-plt.ylabel(f"[{Nunits}]")
+plt.ylabel(f"{Nunits}")
 plt.savefig('bte_predictor_performance.png')
 plt.show()
 
