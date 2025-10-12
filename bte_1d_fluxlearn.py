@@ -23,13 +23,13 @@ x = np.linspace(0.0, L, Nx)
 xcenter = x[Linert:Mactive]
 with open("bte_1d_flux.pkl", "rb") as f:
     ts, npop, flux = pickle.load(f) #next time I should have x, xcenter come through the pickle
-npop *= 1e-9 #Scaling to natural dimension
-Nunits = '[1e9]'
+npop *= 1e-8 #Scaling to natural dimension
+Nunits = '[1e8]'
 flux *= 1e-6
 Funits = '[1e6]'
 if bPlot:# Just a little plotting of as-loaded contours
     mpl.rcParams.update({"figure.figsize": (7, 4)})
-    time_slice = np.linspace(1,len(ts),20,dtype=int)
+    time_slice = np.linspace(1,len(ts)-1,20,dtype=int)
     ts_short = ts[time_slice]
     Nshort = npop[time_slice]
     for Ns in Nshort:
@@ -50,7 +50,7 @@ if bPlot:# Just a little plotting of as-loaded contours
 from numpy.linalg import svd,eig
 fig, axs = plt.subplots(figsize=(6,4))
 def decompose_field(x,T, deg_x= 12):
-    from numpy.polynomial.legendre import legvander,legval
+    from numpy.polynomial.legendre import legvander
     # Rescale coordinates to [-1, 1]
     x_scaled = 2 * (x - x.min()) / (x.max() - x.min()) - 1
     
@@ -74,13 +74,12 @@ def interp_temp(x,c):
 
 def loadGinterpolants(ts, field, nevery, deg_x=12, bPlot=False):
     G = [] #This is a list of Legendre coefficients every n'th time point
-    time_slice = np.arange(0,len(ts)+1,nevery,dtype=int)
+    time_slice = np.arange(0,len(ts),nevery,dtype=int)
     #time_slice = np.linspace(1,len(ts),20,dtype=int)
-    ts_short = ts[time_slice]
     Fshort = field[time_slice]
     for Fs in Fshort:
         c=decompose_field(xcenter,Fs.T[Linert:Mactive], deg_x)
-        G.append(c) #unnecessary [:,0])
+        G.append(c[:,0]) #chatgpt says unnecessary [:,0])
         if bPlot: #Plot efficiency of Legendre interpolation
             F = interp_temp(xcenter,c)
             plt.plot(xcenter ,F)
@@ -101,7 +100,7 @@ def pseudo_inverse_from_svd(u, s, vt, r=None, tol=1e-12):
     s_inv[:r] = 1.0 / s[:r]
     #U_r = u[:, :r], S_r = s[:r], Vt_r = v[:r, :] (depending on numpy.linalg.svd output u,s,vt).
     #v.T[:,0:cmp]@np.diag(sinv[0:cmp])@u.T[0:cmp,:]
-    return (vt.T[:, :r] * s_inv) @ u.T[:r, :]  # returns X^+ (shape matches)
+    return (vt.T[:, :r] @ np.diag(s_inv[:r])) @ u.T[:r, :]  # returns X^+ (shape matches)
 
 deg_Leg = 12
 G,time_slice = loadGinterpolants(ts, npop, 20, deg_Leg)
@@ -122,11 +121,11 @@ for i in range(len(G)-npts):
     #Presume Y(posterior)=A(system transform)*X(prior), then Y=AUSV
     u,s,vt = svd(X,full_matrices=False) #full matrices=false, want to be able to compress, S has nonzero only
     #print(s)
-    #print(Y.shape,v.T[:,0:cmp].shape,u.T[0:cmp,:].shape)
+    #print(Y.shape,vt.T[:,0:cmp].shape,u.T[0:cmp,:].shape)
     #sinv = 1./s #diagonal singular values, I guess vectorized
-    X_pinv = pseudo_inverse_from_svd(u, s, vt) # v.T@np.diag(sinv)@u.T
+    X_pinv = pseudo_inverse_from_svd(u, s, vt, npts) # v.T@np.diag(sinv)@u.T
     A = Y@X_pinv #Use SVD as pseudoinverse of X on Y to get system response
-    X_pinv = pseudo_inverse_from_svd(u, s, vt, r=cmp) # v.T[:,0:cmp]@np.diag(sinv[0:cmp])@u.T[0:cmp,:]
+    X_pinv = pseudo_inverse_from_svd(u, s, vt, cmp) # v.T[:,0:cmp]@np.diag(sinv[0:cmp])@u.T[0:cmp,:]
     Ac = Y@X_pinv #compressed versions
     Lam,Xi = eig(A)
     Lam = np.diag(Lam)
@@ -186,9 +185,9 @@ for i,ax in enumerate(axs):
     #print(u.shape,v.shape)
     x_deg = u.shape[0]//2
     #print(Y.shape,v.T[:,0:cmp].shape,u.T[0:cmp,:].shape)
-    X_pinv = pseudo_inverse_from_svd(u, s, vt) # v.T@np.diag(sinv)@u.T
+    X_pinv = pseudo_inverse_from_svd(u, s, vt, npts) # v.T@np.diag(sinv)@u.T
     A = Y@X_pinv #Use SVD as pseudoinverse of X on Y to get system response
-    X_pinv = pseudo_inverse_from_svd(u, s, vt, r=cmp) # v.T[:,0:cmp]@np.diag(sinv[0:cmp])@u.T[0:cmp,:]
+    X_pinv = pseudo_inverse_from_svd(u, s, vt, cmp) # v.T[:,0:cmp]@np.diag(sinv[0:cmp])@u.T[0:cmp,:]
     Ac = Y@X_pinv #compressed versions
     #print(A[:,0:x_deg].shape)
     #I don't remember what this next comment block was doing
@@ -205,7 +204,7 @@ for i,ax in enumerate(axs):
     Lam,Xi = eig(Ardc0)
     Lam = np.diag(np.abs(Lam))'''
     lAc.append(A) #list of transformations from one major stride to next
-    for axi,M in zip(ax,[u[:,:cmp],np.diag(s[:cmp]),v[:cmp,:],Ac,A,Lam,Xi.real,Xi.imag][:nM]):
+    for axi,M in zip(ax,[u[:,:cmp],np.diag(s[:cmp]),vt[:cmp,:],Ac,A,Lam,Xi.real,Xi.imag][:nM]):
         im = axi.imshow(M, cmap='hot', vmin=-1,vmax=1,
            origin='upper', interpolation='nearest', aspect='equal')
         fig.colorbar(im, ax=axi, fraction=0.046, pad=0.04)
@@ -283,7 +282,7 @@ time_slice =np.linspace(100,5000,nepoch,dtype=int) #these i values are the epoch
 avg_weights = [1.]
 for _ in range(deg_Leg//2):
     avg_weights += [0.,1.]
-if deg_Leg%2 ~= 0:
+if deg_Leg%2 != 0:
     avg_weights += [0.]
 H = np.array(avg_weights,dtype=float).reshape((deg_Leg+1,1)) #Average of Legendre polynomial is the sum of even Pn coefficients, c0+c2+c4...
 
