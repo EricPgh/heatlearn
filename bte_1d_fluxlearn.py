@@ -230,7 +230,7 @@ fig, axs = plt.subplots(figsize=(6,4))
 nA = 1000 #The quantity of propagators to compute
 lAc = [] #The running list of each propagator, quantity nA
 lTimes = []
-cmp = 3 #half of npts=6, 50% compression
+cmp = 3 #half of npts=6, 50% compression seems to currently work best, tunable?
 #for i in range(0,len(G)-11,1):
 strt = 1
 major_stride = 12 #each propagator is 12 timesteps from the prior
@@ -252,7 +252,7 @@ for i in range(nA):
     #It can be seen that the Y observation is X1-X0 while the X observation is X0. Thus the system behavior being trained is X1-X0 = A(X0). Given X0, the A propagator will yield X1-X0 and then X0. This Y observation is divided by the minor stride timestep to yield a proper first derivative approximate
     u,s,vt = svd(X,full_matrices=False) #full matrices=false, want to be able to compress, S has nonzero only
     #A = Y@v.T@np.diag(sinv)@u.T
-    X_pinv = pseudo_inverse_from_svd(u, s, vt, r=cmp) # v.T[:,0:cmp]@np.diag(sinv[0:cmp])@u.T[0:cmp,:]
+    X_pinv = pseudo_inverse_from_svd(u, s, vt, cmp) # v.T[:,0:cmp]@np.diag(sinv[0:cmp])@u.T[0:cmp,:]
     Ac = Y@X_pinv #taking the 50% compression, this also seems to stabilise the approximation, maybe consider a study on the variation of this with integration accuracy
     lAc.append(Ac) #this will contain a time evolution of differential propagators
     lTimes.append(ts[strt+i*major_stride+2*minor_stride]) #here I'm sampling times at the same rate (major_stride) such that I have time positions aligned with Ac transforms
@@ -295,7 +295,7 @@ Hp = spread/sum(spread)
 
 #Begin integration
 i=0
-Navg_0 = 0.1 #Tavg at start of epoch, 0.1 is just this dataset and needs updated
+Navg_0 = 1. #Tavg at start of epoch, 0.1 is just this dataset and needs updated
 t_0 = 0.
 
 colormap = plt.get_cmap('tab10', nepoch)
