@@ -158,7 +158,8 @@ fig, axs = plt.subplots(nA,nM,figsize=(nM,2*nA))
 Gt = []
 lAc = []
 print(len(GN))
-cmp=3 #fidelity or compression again, up to npts
+#I'm wondering if this compression scheme is appropriate the block matrix operator that is occuring with [N;F] concat
+cmp=6 #fidelity or compression again, up to npts
 #for i in range(0,len(G)-11,1):
 strt = 1 #where in the total pickle file should the imaging start, beginning, middle, end?
 major_stride = 12 #major is how many timepoints to skip for each axis for imaging
@@ -230,7 +231,8 @@ fig, axs = plt.subplots(figsize=(6,4))
 nA = 1000 #The quantity of propagators to compute
 lAc = [] #The running list of each propagator, quantity nA
 lTimes = []
-cmp = 3 #half of npts=6, 50% compression seems to currently work best, tunable?
+#I'm wondering if this compression scheme is appropriate the block matrix operator that is occuring with [N;F] concat
+cmp = 6 #half of npts=6, 50% compression seems to currently work best, tunable?
 #for i in range(0,len(G)-11,1):
 strt = 1
 major_stride = 12 #each propagator is 12 timesteps from the prior
