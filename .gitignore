@@ -2,6 +2,11 @@
 *.tar.gz
 *.pkl
 
+#hidden
+.DS_Store
+.virtual_documents
+yield_models.ipynb
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[codz]
