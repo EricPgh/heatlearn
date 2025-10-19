@@ -158,13 +158,13 @@ fig, axs = plt.subplots(nA,nM,figsize=(nM,2*nA))
 Gt = []
 lAc = []
 print(len(GN))
-#I'm wondering if this compression scheme is appropriate the block matrix operator that is occuring with [N;F] concat
-cmp=6 #fidelity or compression again, up to npts
 #for i in range(0,len(G)-11,1):
-strt = 1 #where in the total pickle file should the imaging start, beginning, middle, end?
-major_stride = 12 #major is how many timepoints to skip for each axis for imaging
-minor_stride = 1 #minor is how many timepoints between each column of the X0,X1 observations
-npts = 6 #how many observations to include in each SVD
+strt = 1
+major_stride = 3 #each propagator is 12 timesteps from the prior
+minor_stride = 1 #not skipping timesteps within prior/posterior observations
+npts = 2 #keeping the number of observations small per propagator, trying to make the propagator see the system as nearly a linear change
+#I'm wondering if this compression scheme is appropriate the block matrix operator that is occuring with [N;F] concat
+cmp=1 #fidelity or compression again, up to npts
 for i,ax in enumerate(axs):
     #Gt.append(G[i:11+i]) #each element contains a block slice of GN
     #The 2x first order version uses priors N0 and F0 to predict posterior Y, e.g. dN,dF
@@ -191,6 +191,7 @@ for i,ax in enumerate(axs):
     X_pinv = pseudo_inverse_from_svd(u, s, vt, cmp) # v.T[:,0:cmp]@np.diag(sinv[0:cmp])@u.T[0:cmp,:]
     Ac = Y@X_pinv #compressed versions
     #print(A[:,0:x_deg].shape)
+    print(s)#[:,0:x_deg].shape)
     #I don't remember what this next comment block was doing
     '''Anorm1 = np.linalg.norm(A[:,0:x_deg],ord=2)
     norm_comm1 = np.linalg.norm(A[:,0:x_deg] @ A[:,0:x_deg].conj().T - A[:,0:x_deg].conj().T @ A[:,0:x_deg], ord=2)
@@ -213,6 +214,7 @@ for i,ax in enumerate(axs):
 plt.savefig('bte_2x1stOrd_transforms1.png')
 
 plt.show()
+#exit()
 fig, axs = plt.subplots(nA,1,figsize=(8,12))
 
 print(len(lAc))
@@ -228,16 +230,11 @@ plt.show()
 #block6
 #my best effort so far is this block which demonstrates propagation by forward euler
 fig, axs = plt.subplots(figsize=(6,4))
-nA = 1000 #The quantity of propagators to compute
+nA = 13000//major_stride #The quantity of propagators to compute
 lAc = [] #The running list of each propagator, quantity nA
 lTimes = []
 #I'm wondering if this compression scheme is appropriate the block matrix operator that is occuring with [N;F] concat
-cmp = 6 #half of npts=6, 50% compression seems to currently work best, tunable?
-#for i in range(0,len(G)-11,1):
-strt = 1
-major_stride = 12 #each propagator is 12 timesteps from the prior
-minor_stride = 1 #not skipping timesteps within prior/posterior observations
-npts = 6 #keeping the number of observations small per propagator, trying to make the propagator see the system as nearly a linear change
+print(len(GN),len(GF),len(range(strt+i*major_stride  ,strt+i*major_stride+npts*minor_stride  ,minor_stride)))
 for i in range(nA):
     #Gt.append(G[i:11+i])
     #Again using a second order scheme for integrating
@@ -245,6 +242,7 @@ for i in range(nA):
     F0 = np.array(GF[strt+i*major_stride  :strt+i*major_stride+npts*minor_stride  :minor_stride]).T
     #print(N0.shape,F0.shape)
     X  = np.concatenate((N0,F0),axis=0) #The priors X, are a composite of two coupled observations [N0;F0], both contributing to the prediction of Y, hence the A matrix has twice the size containing how Y evolves from each group of prior observations
+    #print(i,X.shape)
     #Here Y is defined as the rate of change of observations. Alternatively could use just an observation of the system, but the physics being studied are nonlinear second order ODE (or nonlinear system of two first order ODE)
     N1 = np.array(GN[strt+i*major_stride+minor_stride:strt+i*major_stride+npts*minor_stride+minor_stride:minor_stride]).T
     F1 = np.array(GF[strt+i*major_stride+minor_stride:strt+i*major_stride+npts*minor_stride+minor_stride:minor_stride]).T
@@ -253,12 +251,34 @@ for i in range(nA):
     Y  = np.concatenate((dN,dF),axis=0) #The posteriors Y, are a composite of two coupled difference observations [dN/dt;dF/dt], e.g. the state of Y, hence the A matrix has 4x4 block form containing how Y evolves from each group of prior observations
     #It can be seen that the Y observation is X1-X0 while the X observation is X0. Thus the system behavior being trained is X1-X0 = A(X0). Given X0, the A propagator will yield X1-X0 and then X0. This Y observation is divided by the minor stride timestep to yield a proper first derivative approximate
     u,s,vt = svd(X,full_matrices=False) #full matrices=false, want to be able to compress, S has nonzero only
+    s += 0.001
+    print(s)
     #A = Y@v.T@np.diag(sinv)@u.T
     X_pinv = pseudo_inverse_from_svd(u, s, vt, cmp) # v.T[:,0:cmp]@np.diag(sinv[0:cmp])@u.T[0:cmp,:]
     Ac = Y@X_pinv #taking the 50% compression, this also seems to stabilise the approximation, maybe consider a study on the variation of this with integration accuracy
     lAc.append(Ac) #this will contain a time evolution of differential propagators
-    lTimes.append(ts[strt+i*major_stride+2*minor_stride]) #here I'm sampling times at the same rate (major_stride) such that I have time positions aligned with Ac transforms
+    #lTimes.append(ts[strt+i*major_stride+minor_stride]/2+ts[strt+i*major_stride+npts*minor_stride]/2) #here I'm sampling times at the same rate (major_stride) such that I have time positions aligned with Ac transforms
+    lTimes.append(ts[strt+i*major_stride])#/2+ts[strt+(i+1)*major_stride]/2) #here I'm sampling times at the same rate (major_stride) such that I have time positions aligned with Ac transforms
+    #This might not be occuring the way I imagine it. Maybe I should just get the delta_t and increment that in the integration loop
 #print(lTimes[0])
+
+import numpy as np
+from scipy.integrate import solve_ivp
+
+# t_list: sorted times at which A_list is defined
+# A_list: list or array of A matrices, A_list[k] corresponds to t_list[k]
+def A_of_t(t, t_list, A_list):
+    idx = np.searchsorted(t_list, t) - 1
+    if idx < 0: return A_list[0]
+    if idx >= len(t_list)-1: return A_list[-1]
+    t0 = t_list[idx]; t1 = t_list[idx+1]
+    a = (t - t0) / (t1 - t0) if t1>t0 else 0.0
+    return (1-a)*A_list[idx] + a*A_list[idx+1]
+
+def rhs(t, c):
+    return (A_of_t(t, lTimes, lAc)@c).reshape((26,))
+
+
 
 #With propagators formed, here begins the forward euler loop. this is intended to operate between large strides in the pickle solutions, starting with the beginning conditions of one stride and matching the final solutions (from BTE) at the end of the stride
 Nstart=npop[0].T[Linert:Mactive] #population profile from the start
@@ -266,7 +286,7 @@ Fstart=flux[0].T[Linert:Mactive] #flux profile from the start
 n0=decompose_field(xcenter,Nstart,deg_Leg) #Decompose the inside layer only, scale the temperature to natural units
 f0=decompose_field(xcenter,Fstart,deg_Leg) #Decompose the inside layer only, scale the temperature to natural units
 print(n0.shape,f0.shape)
-c0=np.concatenate((n0,f0),axis=0)
+c0=np.concatenate((n0,f0),axis=0).reshape((26,))
 print(c0.shape)
 nflux=np.concatenate((npop,flux),axis=0)
 Nn = n0.shape[0]
@@ -276,7 +296,8 @@ Nn = n0.shape[0]
 #plt.plot(xcenter ,Tappx)
 #print(c)
 nepoch=10 #I'm defining each epoch to be the period I'm running parallel integration alongside BTE solutions. Comparison happens at the epoch end. 
-time_slice =np.linspace(100,5000,nepoch,dtype=int) #these i values are the epoch end points, so the first epoch runs 
+time_slice =np.linspace(100,13000,nepoch,dtype=int) #these i values are the epoch end points, so the first epoch runs 
+#time_slice = time_slice[0:10]
 #from i=0 to i=100, the next i=100 to i=590
 #Notably I reused the list time_slice here. Previously it was returned by the loadGinterpolants(1) call and had a facile step of 1, here its being reused to define the epoch stepping
 
@@ -304,7 +325,12 @@ colormap = plt.get_cmap('tab10', nepoch)
 colors = [colormap(k) for k in range(nepoch)] #when plotting exact vs approx curves, each epoch has own color from cmap
 for t, Cs, col in zip(ts[time_slice],nflux[time_slice],colors):#[0:1]: 10 elements to loop, epochs
     Navg = np.dot(H.T,decompose_field(xcenter,Cs[:Nn].T[Linert:Mactive])) #Ts is the BTE solution and this operation with H measures the average T at the epoch start
-    while lTimes[i]<t: #lTimes was recorded during formation of the propagators, this is the within-epoch integration loop that runs until the time value of the propagator reaches t, the epoch end
+    #print(rhs(lTimes[3],c0))
+    if False:
+        sol = solve_ivp(rhs, (t_0, t), c0, method='RK45', atol=1e-8, rtol=1e-6, max_step= (t-t_0)/100.)
+        c1 = sol.y[:, -1]
+    else:
+      while lTimes[i]<t: #lTimes was recorded during formation of the propagators, this is the within-epoch integration loop that runs until the time value of the propagator reaches t, the epoch end
         '''if i<7: #debugging
             print(lAc[i])
         else:
@@ -312,7 +338,7 @@ for t, Cs, col in zip(ts[time_slice],nflux[time_slice],colors):#[0:1]: 10 elemen
         #The process is as such, the prior solution n0 and f0 are stacked and multiplied with current Ac (i'th) to provide dc(:=c1-c0)
         dc = lAc[i]@c0
         #however this difference is normalized by the minor stride interval (first deriv appx), but we are counting by major strides, so the difference, dc, needs to be scaled by major_stride to predict the increase of c2 over c1 when major_stride had elapsed
-        c1=c0+ major_stride*dc #e.g. +12*dc
+        c1=c0+ major_stride*dc#*1.06 #e.g. +12*dc
         #print(c2)
         if False: #initial attempt to implement corrector. not sure why I was trying to do it within the epoch when I think by design I won't know Tavg except at epoch boundaries. I was having initial difficulties that I was attributing to integration errors and falsely though correctors were needed already. Final working prototype left the final line (c2+=Hp*(y-Hf)) commented and unused. but this workflow essential shows the chatGPT suggested process of distributing the error back into the coefficients by some operator Hp.
             Hf = np.dot(H.T,c1[Nn,:])
@@ -373,14 +399,13 @@ for t, Cs, col in zip(ts[time_slice],nflux[time_slice],colors):#[0:1]: 10 elemen
         #print(Ac)
         #print(c)
         i+=1
-    #print(i)
     plt.plot(xcenter ,interp_temp(xcenter,c1[:Nn]),color=col)
     plt.plot(xcenter ,Cs[:Nn].T[Linert:Mactive],'o',color=col,markevery=100)
     Navg_0 = Navg #Also part of an in-process corrector mechanism.
     t_0 = t
     #break
 plt.xlim(0.,L)
-plt.ylim(0.0,1.01)
+plt.ylim(0.,1.01)
 plt.xlabel(f"x [{Lunits}]")
 plt.ylabel(f"{Nunits}")
 plt.savefig('bte_predictor_performance.png')

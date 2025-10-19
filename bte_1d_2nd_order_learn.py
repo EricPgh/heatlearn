@@ -132,7 +132,7 @@ fig, axs = plt.subplots(nA,nM,figsize=(nM,2*nA))
 Gt = []
 lAc = []
 print(len(G))
-cmp=5 #fidelity or compression again, up to npts
+cmp=1 #fidelity or compression again, up to npts
 #for i in range(0,len(G)-11,1):
 strt = 1 #where in the total pickle file should the imaging start, beginning, middle, end?
 major_stride = 10 #major is how many timepoints to skip for each axis for imaging
@@ -159,6 +159,7 @@ for i,ax in enumerate(axs):
     A = Y@v.T@np.diag(sinv)@u.T #Use SVD as pseudoinverse of X on Y to get system response
     Ac = Y@v.T[:,0:cmp]@np.diag(sinv[0:cmp])@u.T[0:cmp,:] #compressed versions
     #print(A[:,0:x_deg].shape)
+    print(s)#[:,0:x_deg].shape)
     #I don't remember what this next comment block was doing
     '''Anorm1 = np.linalg.norm(A[:,0:x_deg],ord=2)
     norm_comm1 = np.linalg.norm(A[:,0:x_deg] @ A[:,0:x_deg].conj().T - A[:,0:x_deg].conj().T @ A[:,0:x_deg], ord=2)
@@ -197,7 +198,7 @@ fig, axs = plt.subplots(figsize=(6,4))
 nA = 1000 #The quantity of propagators to compute
 lAc = [] #The running list of each propagator, quantity nA
 lTimes = []
-cmp = 3 #half of npts=6, 50% compression
+cmp = 6 #half of npts=6, 50% compression
 #for i in range(0,len(G)-11,1):
 strt = 1
 major_stride = 12 #each propagator is 12 timesteps from the prior
@@ -215,6 +216,7 @@ for i in range(nA):
         np.array(G[strt+i*major_stride+minor_stride:strt+i*major_stride+npts*minor_stride+minor_stride:minor_stride]).T
     #It can be seen that the Y observation is X2-X1 while the X observations are X1 and X0. Thus the system behavior being trained is X2-X1 = A(X1;X0). Given X0 and X1, the A propagator will yield X2-X1 and then X2. Perhaps this Y observation should be divided by the minor stride timestep to yield a proper first derivative approximate
     u,s,v = svd(X,full_matrices=False) #full matrices=false, want to be able to compress, S has nonzero only
+    s += 0.001
     sinv = 1./s[0:cmp] #diagonal singular values, I guess vectorized
     #A = Y@v.T@np.diag(sinv)@u.T
     Ac = Y@v.T[:,0:cmp]@np.diag(sinv)@u.T[0:cmp,:] #taking the 50% compression, this also seems to stabilise the approximation, maybe consider a study on the variation of this with integration accuracy
