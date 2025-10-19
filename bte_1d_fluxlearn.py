@@ -297,7 +297,7 @@ Nn = n0.shape[0]
 #print(c)
 nepoch=10 #I'm defining each epoch to be the period I'm running parallel integration alongside BTE solutions. Comparison happens at the epoch end. 
 time_slice =np.linspace(100,13000,nepoch,dtype=int) #these i values are the epoch end points, so the first epoch runs 
-#time_slice = time_slice[0:10]
+time_slice = time_slice[0:2]
 #from i=0 to i=100, the next i=100 to i=590
 #Notably I reused the list time_slice here. Previously it was returned by the loadGinterpolants(1) call and had a facile step of 1, here its being reused to define the epoch stepping
 
@@ -320,25 +320,33 @@ Hp = spread/sum(spread)
 i=0
 Navg_0 = 1. #Tavg at start of epoch, 0.1 is just this dataset and needs updated
 t_0 = 0.
-
+print('ts',ts[time_slice])
 colormap = plt.get_cmap('tab10', nepoch)
 colors = [colormap(k) for k in range(nepoch)] #when plotting exact vs approx curves, each epoch has own color from cmap
 for t, Cs, col in zip(ts[time_slice],nflux[time_slice],colors):#[0:1]: 10 elements to loop, epochs
     Navg = np.dot(H.T,decompose_field(xcenter,Cs[:Nn].T[Linert:Mactive])) #Ts is the BTE solution and this operation with H measures the average T at the epoch start
-    #print(rhs(lTimes[3],c0))
-    if False:
-        sol = solve_ivp(rhs, (t_0, t), c0, method='RK45', atol=1e-8, rtol=1e-6, max_step= (t-t_0)/100.)
+    #print(rhs(t_0,c0))
+    #print(rhs(t,c0))
+    if True:
+        sol = solve_ivp(rhs, (t_0, t), c0, method='RK45', atol=1e-8, rtol=1e-6, max_step= (t-t_0)/10.)
+        print('t',sol.t)
+        print('y',sol.y[:, -1])
         c1 = sol.y[:, -1]
     else:
-      while lTimes[i]<t: #lTimes was recorded during formation of the propagators, this is the within-epoch integration loop that runs until the time value of the propagator reaches t, the epoch end
+      t_i = t_0 #(t-t_0)/10.+t_0
+      dt = (t-t_0)/10.
+      while t_i<t: #lTimes[i]<t: #lTimes was recorded during formation of the propagators, this is the within-epoch integration loop that runs until the time value of the propagator reaches t, the epoch end
         '''if i<7: #debugging
             print(lAc[i])
         else:
             break'''
         #The process is as such, the prior solution n0 and f0 are stacked and multiplied with current Ac (i'th) to provide dc(:=c1-c0)
-        dc = lAc[i]@c0
+        #dc = rhs(lTimes[i],c0) #lAc[i]@c0
+        dc = rhs(t_i,c0)
         #however this difference is normalized by the minor stride interval (first deriv appx), but we are counting by major strides, so the difference, dc, needs to be scaled by major_stride to predict the increase of c2 over c1 when major_stride had elapsed
-        c1=c0+ major_stride*dc#*1.06 #e.g. +12*dc
+        #This won't run correctly, it works when multiplied by the stride size in index space
+        #dc and rhs need to return in time space or be normalized by time step if SVD is impaired
+        c1=c0+ dc*dt #major_stride*dc#*1.06 #e.g. +12*dc
         #print(c2)
         if False: #initial attempt to implement corrector. not sure why I was trying to do it within the epoch when I think by design I won't know Tavg except at epoch boundaries. I was having initial difficulties that I was attributing to integration errors and falsely though correctors were needed already. Final working prototype left the final line (c2+=Hp*(y-Hf)) commented and unused. but this workflow essential shows the chatGPT suggested process of distributing the error back into the coefficients by some operator Hp.
             Hf = np.dot(H.T,c1[Nn,:])
@@ -405,7 +413,7 @@ for t, Cs, col in zip(ts[time_slice],nflux[time_slice],colors):#[0:1]: 10 elemen
     t_0 = t
     #break
 plt.xlim(0.,L)
-plt.ylim(0.,1.01)
+plt.ylim(0.96,1.01)
 plt.xlabel(f"x [{Lunits}]")
 plt.ylabel(f"{Nunits}")
 plt.savefig('bte_predictor_performance.png')
