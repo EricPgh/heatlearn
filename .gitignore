@@ -2,6 +2,9 @@
 *.tar.gz
 *.pkl
 
+#patches
+*.patch
+
 #hidden
 .DS_Store
 .virtual_documents
