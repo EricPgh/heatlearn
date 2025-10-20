@@ -273,7 +273,9 @@ for i in range(nA):
 import numpy as np
 from scipy.integrate import solve_ivp
 from linear_interp import Propagator
-prop = Propagator().buildMe(lTimes,lAc)
+prop = Propagator()
+prop.major_stride = major_stride
+prop.buildMe(lTimes,lAc)
 
 
 #With propagators formed, here begins the forward euler loop. this is intended to operate between large strides in the pickle solutions, starting with the beginning conditions of one stride and matching the final solutions (from BTE) at the end of the stride
