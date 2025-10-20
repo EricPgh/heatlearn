@@ -24,8 +24,13 @@ class Propagator:
 
     def buildMe(self,times,A_mats):
         # Build cubic spline for each element
-        self.dim0,self.dim1 = A_mats.shape[1:3]
-        self.splines = [[CubicSpline(times, A_mats[:,i,j]) for j in range(self.dim1)] for i in range(self.dim0)]
+        # A_mats: list of 2D arrays, one per time sample
+        # times: corresponding list/array of time points
+        A_data = np.stack(A_mats, axis=0)  # shape = (N_times, n, n)
+        self.dim0,self.dim1 = A_data.shape[1:3]
+        
+        # build cubic spline interpolators for each matrix element
+        self.splines = [[CubicSpline(times, A_data[:,i,j]) for j in range(self.dim1)] for i in range(self.dim0)]
 
     def A_of_t(self,t):
         return np.array([[self.splines[i][j](t) for j in range(self.dim1)] for i in range(self.dim0)])
