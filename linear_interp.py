@@ -16,7 +16,10 @@ class Propagator:
         self.t_list = None
         self.A_list = None
         self.major_stride = None
-
+    def buildMe(self,times,A_mats):
+        self.t_list = times
+        self.A_list = A_mats
+        
     def A_of_t(self,t):
         idx = np.searchsorted(self.t_list, t) - 1
         if idx < 0: return self.A_list[0]
