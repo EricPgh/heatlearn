@@ -11,7 +11,7 @@ import pickle
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib as mpl
-bPlot=True
+bPlot=False
 bPlotEig=False
 L= 1.0 #mm 1e-3
 Lunits = 'mm'
@@ -50,7 +50,8 @@ if bPlot:# Just a little plotting of as-loaded contours
 #block3
 
 from numpy.linalg import svd,eig
-fig, axs = plt.subplots(figsize=(6,4))
+if bPlot:
+    fig, axs = plt.subplots(figsize=(6,4))
 def decompose_field(x,T, deg_x= 12):
     from numpy.polynomial.legendre import legvander
     # Rescale coordinates to [-1, 1]
@@ -156,18 +157,21 @@ GF,time_slice = loadGinterpolants(ts, flux, 1, deg_Leg)
 #print(np.array(G))
 nA = 6 #The number of axes I want to plot over
 nM = 5 #The number of matrices in each row
-fig, axs = plt.subplots(nA,nM,figsize=(nM,2*nA))
+if bPlot:
+    fig, axs = plt.subplots(nA,nM,figsize=(nM,2*nA))
 Gt = []
 lAc = []
 print(len(GN))
 #for i in range(0,len(G)-11,1):
 strt = 1
-major_stride = 3 #each propagator is 12 timesteps from the prior
+major_stride = 4 #each propagator is 12 timesteps from the prior
 minor_stride = 1 #not skipping timesteps within prior/posterior observations
 npts = 2 #keeping the number of observations small per propagator, trying to make the propagator see the system as nearly a linear change
 #I'm wondering if this compression scheme is appropriate the block matrix operator that is occuring with [N;F] concat
 cmp=1 #fidelity or compression again, up to npts
-for i,ax in enumerate(axs):
+for i in range(nA):
+    if bPlot:
+        ax = axs[i]
     #Gt.append(G[i:11+i]) #each element contains a block slice of GN
     #The 2x first order version uses priors N0 and F0 to predict posterior Y, e.g. dN,dF
     N0 = np.array(GN[strt+i*major_stride  :strt+i*major_stride+npts*minor_stride  :minor_stride]).T
@@ -208,30 +212,32 @@ for i,ax in enumerate(axs):
     Lam,Xi = eig(Ardc0)
     Lam = np.diag(np.abs(Lam))'''
     lAc.append(A) #list of transformations from one major stride to next
-    for axi,M in zip(ax,[u[:,:cmp],np.diag(s[:cmp]),vt[:cmp,:],Ac,A,Lam,Xi.real,Xi.imag][:nM]):
-        im = axi.imshow(M, cmap='hot', vmin=-1,vmax=1,
-           origin='upper', interpolation='nearest', aspect='equal')
-        fig.colorbar(im, ax=axi, fraction=0.046, pad=0.04)
-#fig.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
-plt.savefig('bte_2x1stOrd_transforms1.png')
-
-plt.show()
-#exit()
-fig, axs = plt.subplots(nA,1,figsize=(8,12))
-
-print(len(lAc))
-for ax,i in zip(axs, list(range(0,nA))):#len(lAc),100))[:9]):
-    im = ax.imshow(lAc[i], cmap='hot', #vmin=-15,vmax=5,
-           origin='upper', interpolation='nearest', aspect='equal')
-    fig.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
-plt.tight_layout()
-plt.savefig('bte_2x1stOrd_matrix_heatmaps1.png')
-plt.show()
-
-
-#block6
-#my best effort so far is this block which demonstrates propagation by forward euler
-fig, axs = plt.subplots(figsize=(6,4))
+    if bPlot:
+        for axi,M in zip(ax,[u[:,:cmp],np.diag(s[:cmp]),vt[:cmp,:],Ac,A,Lam,Xi.real,Xi.imag][:nM]):
+            im = axi.imshow(M, cmap='hot', vmin=-1,vmax=1,
+               origin='upper', interpolation='nearest', aspect='equal')
+            fig.colorbar(im, ax=axi, fraction=0.046, pad=0.04)
+if bPlot:
+    #fig.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
+    plt.savefig('bte_2x1stOrd_transforms1.png')
+    
+    plt.show()
+    #exit()
+    fig, axs = plt.subplots(nA,1,figsize=(8,12))
+    
+    print(len(lAc))
+    for ax,i in zip(axs, list(range(0,nA))):#len(lAc),100))[:9]):
+        im = ax.imshow(lAc[i], cmap='hot', #vmin=-15,vmax=5,
+               origin='upper', interpolation='nearest', aspect='equal')
+        fig.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
+    plt.tight_layout()
+    plt.savefig('bte_2x1stOrd_matrix_heatmaps1.png')
+    plt.show()
+    
+    
+    #block6
+    #my best effort so far is this block which demonstrates propagation by forward euler
+    fig, axs = plt.subplots(figsize=(6,4))
 nA = 13000//major_stride #The quantity of propagators to compute
 lAc = [] #The running list of each propagator, quantity nA
 lTimes = []
@@ -253,8 +259,8 @@ for i in range(nA):
     Y  = np.concatenate((dN,dF),axis=0) #The posteriors Y, are a composite of two coupled difference observations [dN/dt;dF/dt], e.g. the state of Y, hence the A matrix has 4x4 block form containing how Y evolves from each group of prior observations
     #It can be seen that the Y observation is X1-X0 while the X observation is X0. Thus the system behavior being trained is X1-X0 = A(X0). Given X0, the A propagator will yield X1-X0 and then X0. This Y observation is divided by the minor stride timestep to yield a proper first derivative approximate
     u,s,vt = svd(X,full_matrices=False) #full matrices=false, want to be able to compress, S has nonzero only
-    s += 0.001
-    print(s)
+    #s += 0.001
+    #print(s)
     #A = Y@v.T@np.diag(sinv)@u.T
     X_pinv = pseudo_inverse_from_svd(u, s, vt, cmp) # v.T[:,0:cmp]@np.diag(sinv[0:cmp])@u.T[0:cmp,:]
     Ac = Y@X_pinv #taking the 50% compression, this also seems to stabilise the approximation, maybe consider a study on the variation of this with integration accuracy
@@ -279,7 +285,7 @@ def A_of_t(t, t_list, A_list):
 
 def rhs(t, c):
     #allow inferred reshaping to 1d and normalize by the timestep
-    return (A_of_t(t, lTimes, lAc)@c/(lTimes[1]-lTimes[0])).reshape(-1)  #(26,)
+    return (A_of_t(t, lTimes, lAc)@c*major_stride/(lTimes[1]-lTimes[0])).reshape(-1)  #(26,)
 
 
 
@@ -300,7 +306,7 @@ Nn = n0.shape[0]
 #print(c)
 nepoch=10 #I'm defining each epoch to be the period I'm running parallel integration alongside BTE solutions. Comparison happens at the epoch end. 
 time_slice =np.linspace(100,13000,nepoch,dtype=int) #these i values are the epoch end points, so the first epoch runs 
-#time_slice = time_slice[0:2]
+#time_slice = time_slice[0:3]
 #from i=0 to i=100, the next i=100 to i=590
 #Notably I reused the list time_slice here. Previously it was returned by the loadGinterpolants(1) call and had a facile step of 1, here its being reused to define the epoch stepping
 
@@ -335,6 +341,12 @@ for t, Cs, col in zip(ts[time_slice],nflux[time_slice],colors):#[0:1]: 10 elemen
         #print('t',sol.t)
         #print('y',sol.y[:, -1])
         c1 = sol.y[:, -1]
+        if False:
+            for j in range(sol.y.shape[1]):
+                plt.plot(xcenter ,interp_temp(xcenter,sol.y[:Nn,j]),color=col)
+        else:
+            plt.plot(xcenter ,interp_temp(xcenter,sol.y[:Nn,-1]),color=col)
+        c0=c1 #update c_i solutions
     else:
       t_i = t_0 #(t-t_0)/10.+t_0
       dt = (t-t_0)/10.
@@ -411,7 +423,7 @@ for t, Cs, col in zip(ts[time_slice],nflux[time_slice],colors):#[0:1]: 10 elemen
         #print(Ac)
         #print(c)
         i+=1
-    plt.plot(xcenter ,interp_temp(xcenter,c1[:Nn]),color=col)
+      plt.plot(xcenter ,interp_temp(xcenter,c1[:Nn]),color=col)
     plt.plot(xcenter ,Cs[:Nn].T[Linert:Mactive],'o',color=col,markevery=100)
     Navg_0 = Navg #Also part of an in-process corrector mechanism.
     t_0 = t
