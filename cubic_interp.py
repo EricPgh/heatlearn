@@ -26,6 +26,7 @@ class Propagator:
         # Build cubic spline for each element
         # A_mats: list of 2D arrays, one per time sample
         # times: corresponding list/array of time points
+        self.t_list = times
         A_data = np.stack(A_mats, axis=0)  # shape = (N_times, n, n)
         self.dim0,self.dim1 = A_data.shape[1:3]
         

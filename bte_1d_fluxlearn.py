@@ -164,7 +164,7 @@ lAc = []
 print(len(GN))
 #for i in range(0,len(G)-11,1):
 strt = 1
-major_stride = 4 #each propagator is 12 timesteps from the prior
+major_stride = 16 #each propagator is 12 timesteps from the prior
 minor_stride = 1 #not skipping timesteps within prior/posterior observations
 npts = 2 #keeping the number of observations small per propagator, trying to make the propagator see the system as nearly a linear change
 #I'm wondering if this compression scheme is appropriate the block matrix operator that is occuring with [N;F] concat
@@ -272,7 +272,8 @@ for i in range(nA):
 
 import numpy as np
 from scipy.integrate import solve_ivp
-from linear_interp import Propagator
+#from linear_interp import Propagator
+from cubic_interp import Propagator
 prop = Propagator()
 prop.major_stride = major_stride
 prop.buildMe(lTimes,lAc)
