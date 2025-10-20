@@ -272,21 +272,8 @@ for i in range(nA):
 
 import numpy as np
 from scipy.integrate import solve_ivp
-
-# t_list: sorted times at which A_list is defined
-# A_list: list or array of A matrices, A_list[k] corresponds to t_list[k]
-def A_of_t(t, t_list, A_list):
-    idx = np.searchsorted(t_list, t) - 1
-    if idx < 0: return A_list[0]
-    if idx >= len(t_list)-1: return A_list[-1]
-    t0 = t_list[idx]; t1 = t_list[idx+1]
-    a = (t - t0) / (t1 - t0) if t1>t0 else 0.0
-    return (1-a)*A_list[idx] + a*A_list[idx+1]
-
-def rhs(t, c):
-    #allow inferred reshaping to 1d and normalize by the timestep
-    return (A_of_t(t, lTimes, lAc)@c*major_stride/(lTimes[1]-lTimes[0])).reshape(-1)  #(26,)
-
+from linear_interp import Propagator
+prop = Propagator().buildMe(lTimes,lAc)
 
 
 #With propagators formed, here begins the forward euler loop. this is intended to operate between large strides in the pickle solutions, starting with the beginning conditions of one stride and matching the final solutions (from BTE) at the end of the stride
@@ -337,7 +324,7 @@ for t, Cs, col in zip(ts[time_slice],nflux[time_slice],colors):#[0:1]: 10 elemen
     #print(rhs(t_0,c0))
     #print(rhs(t,c0))
     if True:
-        sol = solve_ivp(rhs, (t_0, t), c0, method='RK45', atol=1e-8, rtol=1e-6, max_step= (t-t_0)/10.)
+        sol = solve_ivp(prop.rhs, (t_0, t), c0, method='RK45', atol=1e-8, rtol=1e-6, max_step= (t-t_0)/10.)
         #print('t',sol.t)
         #print('y',sol.y[:, -1])
         c1 = sol.y[:, -1]
@@ -356,8 +343,8 @@ for t, Cs, col in zip(ts[time_slice],nflux[time_slice],colors):#[0:1]: 10 elemen
         else:
             break'''
         #The process is as such, the prior solution n0 and f0 are stacked and multiplied with current Ac (i'th) to provide dc(:=c1-c0)
-        #dc = rhs(lTimes[i],c0) #lAc[i]@c0
-        dc = rhs(t_i,c0)
+        #dc = prop.rhs(lTimes[i],c0) #lAc[i]@c0
+        dc = prop.rhs(t_i,c0)
         #however this difference is normalized by the minor stride interval (first deriv appx), but we are counting by major strides, so the difference, dc, needs to be scaled by major_stride to predict the increase of c2 over c1 when major_stride had elapsed
         #This won't run correctly, it works when multiplied by the stride size in index space
         #dc and rhs need to return in time space or be normalized by time step if SVD is impaired
