@@ -243,6 +243,13 @@ if bPlot:
 from cubic_interp import Propagator
 props = [Propagator() for _ in range(2)]
 
+import math
+
+def nDMD(n):
+    return 2 + round(28 * (1 - math.tanh(0.015 * n)))
+def cDMD(n):
+    return 1 + round(29 * (1 - math.tanh(0.015 * n)))
+
 for j,major_stride in enumerate([4,16]):
     props[j].major_stride = major_stride
     nA = 13000//major_stride #The quantity of propagators to compute
@@ -250,13 +257,15 @@ for j,major_stride in enumerate([4,16]):
     lTimes = []
     strt = 1
     minor_stride = 1 #not skipping timesteps within prior/posterior observations
-    npts = 2 #keeping the number of observations small per propagator, trying to make the propagator see the system as nearly a linear change
+    #npts = 2 #keeping the number of observations small per propagator, trying to make the propagator see the system as nearly a linear change
     #I'm wondering if this compression scheme is appropriate the block matrix operator that is occuring with [N;F] concat
-    cmp=1 #fidelity or compression again, up to npts
+    #cmp=1 #fidelity or compression again, up to npts
     #I'm wondering if this compression scheme is appropriate the block matrix operator that is occuring with [N;F] concat
     #print(len(GN),len(GF),len(range(strt+i*major_stride  ,strt+i*major_stride+npts*minor_stride  ,minor_stride)))
     for i in range(nA):
         #Gt.append(G[i:11+i])
+        npts = nDMD(i*major_stride)
+        cmp = cDMD(i*major_stride)
         #Again using a second order scheme for integrating
         N0 = np.array(GN[strt+i*major_stride  :strt+i*major_stride+npts*minor_stride  :minor_stride]).T
         F0 = np.array(GF[strt+i*major_stride  :strt+i*major_stride+npts*minor_stride  :minor_stride]).T
@@ -271,7 +280,7 @@ for j,major_stride in enumerate([4,16]):
         Y  = np.concatenate((dN,dF),axis=0) #The posteriors Y, are a composite of two coupled difference observations [dN/dt;dF/dt], e.g. the state of Y, hence the A matrix has 4x4 block form containing how Y evolves from each group of prior observations
         #It can be seen that the Y observation is X1-X0 while the X observation is X0. Thus the system behavior being trained is X1-X0 = A(X0). Given X0, the A propagator will yield X1-X0 and then X0. This Y observation is divided by the minor stride timestep to yield a proper first derivative approximate
         u,s,vt = svd(X,full_matrices=False) #full matrices=false, want to be able to compress, S has nonzero only
-        #s += 0.001
+        s += 0.001
         #print(s)
         #A = Y@v.T@np.diag(sinv)@u.T
         X_pinv = pseudo_inverse_from_svd(u, s, vt, cmp) # v.T[:,0:cmp]@np.diag(sinv[0:cmp])@u.T[0:cmp,:]
@@ -283,32 +292,34 @@ for j,major_stride in enumerate([4,16]):
     #print(lTimes[0])
     props[j].buildMe(lTimes,lAc)
 
-def plot_A_elements(props,ts, n_points=200):
+def plot_A_elements(props,ts_m, n_points=200):
     """Plot all A_ij(t) trajectories from the Propagator instance."""
-    t_dense = np.linspace(ts[0], ts[1], n_points)
-    n0, n1 = props[0].dim0, props[0].dim1
-
     fig, ax = plt.subplots(figsize=(10, 6))
-    colormap = plt.get_cmap('tab10', n0*n1)
-    colors = [colormap(k) for k in range(n0*n1)] #when plotting exact vs approx curves, each epoch has own color from cmap
-    for i in range(n0):
-        for j in range(n1):
-            col = colors[i*n1+j]
-            A_vals = [ [props[k].splines[i][j](t) for t in t_dense] for k in range(2)]
-            #ax.plot(t_dense, A_vals, label=f"A[{i},{j}]")
-            ax.plot(A_vals[0], A_vals[1], linestyle='',marker='+',color=col)
+    for ts,m in ts_m:
+        t_dense = np.linspace(ts[0], ts[1], n_points)
+        n0, n1 = props[0].dim0, props[0].dim1
 
-    ax.set_xlabel("Time")
-    ax.set_ylabel("A(t) elements")
-    ax.set_title("Time evolution of A(t) matrix elements")
-    ax.legend(fontsize=8, ncol=3, loc="upper right", bbox_to_anchor=(1.3, 1))
+        colormap = plt.get_cmap('tab10', n0*n1)
+        colors = [colormap(k) for k in range(n0*n1)] #when plotting exact vs approx curves, each epoch has own color from cmap
+        for i in range(n0):
+            for j in range(n1):
+                col = colors[i*n1+j]
+                A_vals = [ [props[k].splines[i][j](t) for t in t_dense] for k in range(2)]
+                #ax.plot(t_dense, A_vals, label=f"A[{i},{j}]")
+                ax.plot(A_vals[0], A_vals[1], linestyle='',marker=m,color=col)
+
+        ax.set_xlabel("Time")
+        ax.set_ylabel("A(t) elements")
+        ax.set_title(f"Time evolution of A(t) matrix elements s+=, npts,cmp variable")
+    #ax.legend(fontsize=8, ncol=3, loc="upper right", bbox_to_anchor=(1.3, 1))
     plt.tight_layout()
-    plt.xlim(-.0004,.0005)
-    plt.ylim(-.0004,.0005)
+    #plt.xlim(-.0004,.0005)
+    #plt.ylim(-.0004,.0005)
     plt.show()
 
-plot_A_elements(props,[0.,0.2])
-plot_A_elements(props,[0.2,min([props[j].t_list[-1] for j in range(2)])])
+plot_A_elements(props,[ ([0.,0.05],'^'),
+                        ([0.05,0.2],'o'),
+                        ([0.2,min([props[j].t_list[-1] for j in range(2)])],'+') ])
 
 prop = props[1]
 import numpy as np
