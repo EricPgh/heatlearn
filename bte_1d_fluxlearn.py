@@ -281,7 +281,7 @@ for j,major_stride in enumerate([4,16]):
         lTimes.append(ts[strt+i*major_stride])#/2+ts[strt+(i+1)*major_stride]/2) #here I'm sampling times at the same rate (major_stride) such that I have time positions aligned with Ac transforms
         #This might not be occuring the way I imagine it. Maybe I should just get the delta_t and increment that in the integration loop
     #print(lTimes[0])
-    prop.buildMe(lTimes,lAc)
+    props[j].buildMe(lTimes,lAc)
 
 def plot_A_elements(props,ts, n_points=200):
     """Plot all A_ij(t) trajectories from the Propagator instance."""
@@ -303,8 +303,8 @@ def plot_A_elements(props,ts, n_points=200):
     ax.set_title("Time evolution of A(t) matrix elements")
     ax.legend(fontsize=8, ncol=3, loc="upper right", bbox_to_anchor=(1.3, 1))
     plt.tight_layout()
-    plt.xlim(-.004,.005)
-    plt.ylim(-.004,.005)
+    plt.xlim(-.0004,.0005)
+    plt.ylim(-.0004,.0005)
     plt.show()
 
 plot_A_elements(props,[0.,0.2])
