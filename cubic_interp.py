@@ -36,5 +36,10 @@ class Propagator:
     def A_of_t(self,t):
         return np.array([[self.splines[i][j](t) for j in range(self.dim1)] for i in range(self.dim0)])
     
-    def rhs(self, t, c):
-        return (self.A_of_t(t)@c*self.major_stride/(self.t_list[1]-self.t_list[0])).reshape(-1)  #(26,)
+    def rhs(self, *args): #t, c, bv):
+        if len(args) == 2:
+            t, c = args
+            return (self.A_of_t(t)@c*self.major_stride/(self.t_list[1]-self.t_list[0])).reshape(-1)  #(26,)
+        if len(args) == 3:
+            t, c, bv = args
+            return (self.A_of_t(t)@np.concatenate((c,bv),axis=0)*self.major_stride/(self.t_list[1]-self.t_list[0])).reshape(-1)  #(26,)
