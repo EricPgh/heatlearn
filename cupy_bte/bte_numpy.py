@@ -178,11 +178,21 @@ def demo():
         t_final=2e-6,
         save_every=1e0,
     )
-
-    solver = BTESolver(p)
-    ts, Tsnaps, flux = solver.run(progress=True, write_flux=True)
-    with open('bte_1d_flux.pkl','wb') as file:
-        pickle.dump([ts,Tsnaps,flux],file)
+    sides = ['left','right']
+    levels = [0.8,0.9,1.0,1.1,1.2]
+    for i,side in enumerate(sides):
+      for j,lev in enumerate(levels):
+        variant = f"_{side}{lev:.1f}"
+        if i==0:
+            p.dTL=lev
+            p.dRL=0.
+        else:
+            p.dTL=0.
+            p.dRL=lev
+        solver = BTESolver(p)
+        ts, Tsnaps, flux = solver.run(progress=True, write_flux=True)
+        with open(f'bte_1d_flux{variant}.pkl','wb') as file:
+            pickle.dump([ts,Tsnaps,flux],file)
 
     if False:#try:
         import matplotlib.pyplot as plt
