@@ -42,7 +42,6 @@ for i,side in enumerate(sides):
     dTS[variant] = ts[:]
     dNPOP[variant] = npop[:]
     dFLUX[variant] = flux[:]
-    dBIDX[variant] = idx
 
 from numpy.linalg import svd,eig
 def decompose_field(x,T, deg_x= 12):
@@ -162,8 +161,8 @@ for j,major_stride in enumerate([16]): #Just running with one for now but availa
                 npts = nDMD(i*major_stride)
                 cmp = cDMD(i*major_stride)
                 #Again using a second order scheme for integrating
-                N0 = np.array(dGN[variant][strt+i*major_stride  :strt+i*major_stride+npts*minor_stride  :minor_stride]).T
-                F0 = np.array(dGF[variant][strt+i*major_stride  :strt+i*major_stride+npts*minor_stride  :minor_stride]).T
+                N0 = np.array(dGN[variant][0][strt+i*major_stride  :strt+i*major_stride+npts*minor_stride  :minor_stride]).T
+                F0 = np.array(dGF[variant][0][strt+i*major_stride  :strt+i*major_stride+npts*minor_stride  :minor_stride]).T
                 B0 = np.zeros( (nidx,npts) );B0[idx,:] = lev
                 #print(N0.shape,F0.shape)
                 #The priors X, are a composite of two coupled observations [N0;F0], both contributing to the prediction of Y, hence the A matrix has twice the size containing how Y evolves from each group of prior observations
@@ -171,8 +170,8 @@ for j,major_stride in enumerate([16]): #Just running with one for now but availa
                 lX.append( np.concatenate((N0,F0,B0),axis=0) )
                 #print(i,X.shape)
                 #Here Y is defined as the rate of change of observations. Alternatively could use just an observation of the system, but the physics being studied are nonlinear second order ODE (or nonlinear system of two first order ODE)
-                N1 = np.array(GN[strt+i*major_stride+minor_stride:strt+i*major_stride+npts*minor_stride+minor_stride:minor_stride]).T
-                F1 = np.array(GF[strt+i*major_stride+minor_stride:strt+i*major_stride+npts*minor_stride+minor_stride:minor_stride]).T
+                N1 = np.array(dGN[variant][0][strt+i*major_stride+minor_stride:strt+i*major_stride+npts*minor_stride+minor_stride:minor_stride]).T
+                F1 = np.array(dGF[variant][0][strt+i*major_stride+minor_stride:strt+i*major_stride+npts*minor_stride+minor_stride:minor_stride]).T
                 dN = (N1-N0)/minor_stride
                 dF = (F1-F0)/minor_stride
                 #The boundary levels don't appear in the Y values because they are priors only, not posteriors
@@ -356,46 +355,3 @@ plt.ylabel(f"{Nunits}")
 plt.savefig('bte_predictor_performance.png')
 plt.show()
 
-#block7
-if False: #Just rying to see patterns in the transform
-    fig, axs = plt.subplots(1,5,figsize=(12,4))
-    #fig, ax = plt.subplots(figsize=(12,4))
-    for j,ax in enumerate(axs):#[0,:]):
-        im = ax.imshow(Gt[j], cmap='tab20', vmin=-.2,vmax=.2,
-                origin='upper', interpolation='nearest', aspect='equal')
-    '''for j,ax in enumerate(axs[1,:]):
-        im = ax.imshow(Gt[j+5], cmap='tab20', vmin=-5.,vmax=2.,
-                origin='upper', interpolation='nearest', aspect='equal')'''
-    fig.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
-    #plt.title(f'Green\'s Function after {Nt} steps')
-    #plt.xlabel(f"x [{Lunits}]")
-    #plt.ylabel(f'{Nunits}')
-    plt.tight_layout()
-    #plt.savefig('matrix_evolution.png')
-    plt.show()
-
-
-#The previous process of integrating in a second order fashion was successful because the physical equations are a 2 equation first order coupled system. The second order form just matched the reduction from two equations into one by differentiation. Here I formulate a variation wherein I maintain the coupled system. I define two different observations, N and F. 
-if False:
-    N0 = np.array(GN[strt+i*major_stride  :strt+i*major_stride+npts*minor_stride  :minor_stride]).T
-    F0 = np.array(GF[strt+i*major_stride  :strt+i*major_stride+npts*minor_stride  :minor_stride]).T
-    #print(X0.shape,X1.shape)
-    X  = np.concatenate((N0,F0),axis=0)
-    #Again using the change as the posterior, this should produce dY/dt=A(X0) or the relation between change and priors
-    dN1  = (np.array(GN[strt+i*major_stride+minor_stride:strt+i*major_stride+npts*minor_stride+minor_stride:minor_stride]).T-N0)/minor_stride
-    dF1  = (np.array(GF[strt+i*major_stride+minor_stride:strt+i*major_stride+npts*minor_stride+minor_stride:minor_stride]).T-F0)/minor_stride
-    Y  = np.concatenate((dN1,dF1),axis=0)
-    #It can be seen that the Y observation is (X1-X0)/dt while the X observations are 0'th values of fields N and F. Thus the system behavior being trained is (X1-X0)/dt = A(X0). Given X0, the A propagator will yield X1-X0 and then X1. Again this Y observation is divided by the minor stride timestep to yield a proper first derivative approximate. The value of this formulation as a tracking of two coupled fields is because the internal F field, decomposed into the GF observations, are dependent on the N field as well as the boundary values of F. I would like to extend this version one step further to contain boundary values like such:
-    N0 = np.array(GN[strt+i*major_stride  :strt+i*major_stride+npts*minor_stride  :minor_stride]).T
-    F0 = np.array(GF[strt+i*major_stride  :strt+i*major_stride+npts*minor_stride  :minor_stride]).T
-    BF = np.array([1,0,0,0])#?
-    #print(X0.shape,X1.shape)
-    X  = np.concatenate((N0,F0,BF),axis=0)
-    #Again using the change as the posterior, this should produce dY/dt=A(X0;BF) or the relation between change and priors
-    dN1  = (np.array(GN[strt+i*major_stride+minor_stride:strt+i*major_stride+npts*minor_stride+minor_stride:minor_stride]).T-N0)/minor_stride
-    dF1  = (np.array(GF[strt+i*major_stride+minor_stride:strt+i*major_stride+npts*minor_stride+minor_stride:minor_stride]).T-F0)/minor_stride
-    Y  = np.concatenate((dN1,dF1),axis=0)
-
-    #I know there does exist a linear transform (Greens function style) such that F=G*BF. And I have demonstrated this with basic thermal fields (Fourier eq) in 2D. However in this case the domain is 1D and I am predicting dF(t)=G*BF(t). These matrices N0 and F0 are multiple prior observations that evolve into multiple posterior observations. What is BF in that space?  #The time varying greens function method applies a kernel to the input history by convolution which is also a linear process. Therefore the same method to develop the transform matrix should admit a convolution operation.
-#If the input signal is FB(t) and the output of the convolution is F(t+dt), then the FB should be :=FB(dt) (?yes?) and is the forcing function being applied during the interval dt. I desire to apply it as a vector of Legendre coefficients, probably up to n=3 (or 2?). If each time step is short, the polynomials become splines across the many time solutions. Using orthogonal coordinates should permit the superposition of multiple vectors to form arbitrary input signals.
-#This individual task can be developed separate of the other nonlinear process to show viability.
