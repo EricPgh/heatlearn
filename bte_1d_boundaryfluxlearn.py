@@ -10,7 +10,64 @@ import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib as mpl
 from scipy.integrate import solve_ivp
-from HeatLearner import decompose_field, interp_temp
+from numpy.linalg import svd,eig
+from HeatLearner import decompose_field, interp_temp, nDMD, cDMD, pseudo_inverse_from_svd
+
+def buildPropagators(HL):
+    for j,major_stride in enumerate([16]): #Just running with one for now but available for testing
+        HL.prop.major_stride = major_stride
+        nA = 13000//major_stride #The quantity of propagators to compute
+        lAc = [] #The running list of each propagator, quantity nA
+        lTimes = []
+        strt = 1
+        minor_stride = 1 #not skipping timesteps within prior/posterior observations
+        for i in range(nA):
+            lX = []
+            lY = []
+            for j,side in enumerate(HL.sides):
+                for k,lev in enumerate(HL.levels):
+                    variant = f"_{side}{lev:.1f}"
+                    idx = j  #which index of the boundary flux vector should get assigned the level
+                    nidx = len(HL.sides)#*ndeg_bv #what is the dimension of the boundary flux vector, only operating with 1 degree (constant)
+    
+                    npts = nDMD(i*major_stride)
+                    cmp = cDMD(i*major_stride)
+                    #Again using a second order scheme for integrating
+                    N0 = np.array(HL.dGN[variant][0][strt+i*major_stride  :strt+i*major_stride+npts*minor_stride  :minor_stride]).T
+                    F0 = np.array(HL.dGF[variant][0][strt+i*major_stride  :strt+i*major_stride+npts*minor_stride  :minor_stride]).T
+                    B0 = np.zeros( (nidx,npts) );B0[idx,:] = lev
+                    #print(N0.shape,F0.shape)
+                    #The priors X, are a composite of two coupled observations [N0;F0], both contributing to the prediction of Y, hence the A matrix has twice the size containing how Y evolves from each group of prior observations
+                    #Adding to this are the boundary flux levels which should impact the F posteriors
+                    lX.append( np.concatenate((N0,F0,B0),axis=0) )
+                    #print(i,X.shape)
+                    #Here Y is defined as the rate of change of observations. Alternatively could use just an observation of the system, but the physics being studied are nonlinear second order ODE (or nonlinear system of two first order ODE)
+                    N1 = np.array(HL.dGN[variant][0][strt+i*major_stride+minor_stride:strt+i*major_stride+npts*minor_stride+minor_stride:minor_stride]).T
+                    F1 = np.array(HL.dGF[variant][0][strt+i*major_stride+minor_stride:strt+i*major_stride+npts*minor_stride+minor_stride:minor_stride]).T
+                    dN = (N1-N0)/minor_stride
+                    dF = (F1-F0)/minor_stride
+                    #The boundary levels don't appear in the Y values because they are priors only, not posteriors
+                    lY.append( np.concatenate((dN,dF),axis=0) ) #The posteriors Y, are a composite of two coupled difference observations [dN/dt;dF/dt], e.g. the state of Y, hence the A matrix has 4x4 block form containing how Y evolves from each group of prior observations
+            #It can be seen that the Y observation is X1-X0 while the X observation is X0. Thus the system behavior being trained is X1-X0 = A(X0). Given X0, the A propagator will yield X1-X0 and then X0. This Y observation is divided by the minor stride timestep to yield a proper first derivative approximate
+            X = np.concatenate(lX,axis=1)
+            u,s,vt = svd(X,full_matrices=False) #full matrices=false, want to be able to compress, S has nonzero only
+            s += 0.001
+            #print(s)
+            #A = Y@v.T@np.diag(sinv)@u.T
+            X_pinv = pseudo_inverse_from_svd(u, s, vt, cmp) # v.T[:,0:cmp]@np.diag(sinv[0:cmp])@u.T[0:cmp,:]
+            Y = np.concatenate(lY,axis=1)
+            Ac = Y@X_pinv #taking the 50% compression, this also seems to stabilise the approximation, maybe consider a study on the variation of this with integration accuracy
+            lAc.append(Ac) #this will contain a time evolution of differential propagators
+            #lTimes.append(ts[strt+i*major_stride+minor_stride]/2+ts[strt+i*major_stride+npts*minor_stride]/2) #here I'm sampling times at the same rate (major_stride) such that I have time positions aligned with Ac transforms
+            lTimes.append(HL.dTS[variant][strt+i*major_stride])#/2+ts[strt+(i+1)*major_stride]/2) #here I'm sampling times at the same rate (major_stride) such that I have time positions aligned with Ac transforms
+            #This might not be occuring the way I imagine it. Maybe I should just get the delta_t and increment that in the integration loop
+        #print(lTimes[0])
+        HL.prop.buildMe(lTimes,lAc)
+    
+    #plot_A_elements(props,[ ([0.,0.05],'^'),
+    #                        ([0.05,0.2],'o'),
+    #                        ([0.2,min([props[j].t_list[-1] for j in range(2)])],'+') ])
+
 
 def integrate(HL):
     with open(f"bte_1d_flux.pkl", "rb") as f:
