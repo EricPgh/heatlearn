@@ -9,9 +9,65 @@ import pickle
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib as mpl
+import math
 from scipy.integrate import solve_ivp
 from numpy.linalg import svd,eig
-from HeatLearner import decompose_field, interp_temp, nDMD, cDMD, pseudo_inverse_from_svd
+from HeatLearner import decompose_field, interp_temp, pseudo_inverse_from_svd
+
+def nDMD(n):
+    return 2 + round(28 * (1 - math.tanh(0.015 * n)))
+def cDMD(n):
+    return 1 + round(29 * (1 - math.tanh(0.015 * n)))
+
+
+def plot_A_elements(prop,ts_m, n_points=200):
+    """Plot all A_ij(t) trajectories from the Propagator instance."""
+    fig, ax = plt.subplots(figsize=(10, 6))
+    for ts,m in ts_m:
+        t_dense = np.linspace(ts[0], ts[1], n_points)
+        n0, n1 = prop.dim0, prop.dim1
+
+        colormap = plt.get_cmap('tab10', n0*n1)
+        colors = [colormap(k) for k in range(n0*n1)] #when plotting exact vs approx curves, each epoch has own color from cmap
+        for i in range(n0):
+            for j in range(n1):
+                col = colors[i*n1+j]
+                A_vals = [prop.splines[i][j](t) for t in t_dense]
+                ax.plot(t_dense, A_vals, linestyle='',marker=m,color=col) #, label=f"A[{i},{j}]")
+
+        ax.set_xlabel("Time")
+        ax.set_ylabel("A(t) elements")
+        ax.set_title(f"Time evolution of A(t) matrix elements s+=, npts,cmp variable")
+    #ax.legend(fontsize=8, ncol=3, loc="upper right", bbox_to_anchor=(1.3, 1))
+    plt.tight_layout()
+    plt.xlim(0.,.05)
+    plt.ylim(-.04,.05)
+    plt.show()
+
+def plot_A_element_comparison(props,ts_m, n_points=200):
+    """Plot all A_ij(t) trajectories from the Propagator instance."""
+    fig, ax = plt.subplots(figsize=(10, 6))
+    for ts,m in ts_m:
+        t_dense = np.linspace(ts[0], ts[1], n_points)
+        n0, n1 = props[0].dim0, props[0].dim1
+
+        colormap = plt.get_cmap('tab10', n0*n1)
+        colors = [colormap(k) for k in range(n0*n1)] #when plotting exact vs approx curves, each epoch has own color from cmap
+        for i in range(n0):
+            for j in range(n1):
+                col = colors[i*n1+j]
+                A_vals = [ [props[k].splines[i][j](t) for t in t_dense] for k in range(2)]
+                #ax.plot(t_dense, A_vals, label=f"A[{i},{j}]")
+                ax.plot(A_vals[0], A_vals[1], linestyle='',marker=m,color=col)
+
+        ax.set_xlabel("Time")
+        ax.set_ylabel("A(t) elements")
+        ax.set_title(f"Time evolution of A(t) matrix elements s+=, npts,cmp variable")
+    #ax.legend(fontsize=8, ncol=3, loc="upper right", bbox_to_anchor=(1.3, 1))
+    plt.tight_layout()
+    #plt.xlim(-.0004,.0005)
+    #plt.ylim(-.0004,.0005)
+    plt.show()
 
 def buildPropagators(HL):
     for j,major_stride in enumerate([16]): #Just running with one for now but available for testing
@@ -97,7 +153,7 @@ def integrate(HL):
     #print(c)
     nepoch=10 #I'm defining each epoch to be the period I'm running parallel integration alongside BTE solutions. Comparison happens at the epoch end. 
     time_slice =np.linspace(100,13000,nepoch,dtype=int) #these i values are the epoch end points, so the first epoch runs 
-    #time_slice = time_slice[0:3]
+    time_slice = time_slice[0:3]
     #from i=0 to i=100, the next i=100 to i=590
     #Notably I reused the list time_slice here. Previously it was returned by the loadGinterpolants(1) call and had a facile step of 1, here its being reused to define the epoch stepping
     

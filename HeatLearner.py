@@ -70,38 +70,9 @@ def pseudo_inverse_from_svd(u, s, vt, r=None, tol=1e-12):
     #v.T[:,0:cmp]@np.diag(sinv[0:cmp])@u.T[0:cmp,:]
     return (vt.T[:, :r] @ np.diag(s_inv[:r])) @ u.T[:r, :]  # returns X^+ (shape matches)
 
-def plot_A_elements(props,ts_m, n_points=200):
-    """Plot all A_ij(t) trajectories from the Propagator instance."""
-    fig, ax = plt.subplots(figsize=(10, 6))
-    for ts,m in ts_m:
-        t_dense = np.linspace(ts[0], ts[1], n_points)
-        n0, n1 = props[0].dim0, props[0].dim1
-
-        colormap = plt.get_cmap('tab10', n0*n1)
-        colors = [colormap(k) for k in range(n0*n1)] #when plotting exact vs approx curves, each epoch has own color from cmap
-        for i in range(n0):
-            for j in range(n1):
-                col = colors[i*n1+j]
-                A_vals = [ [props[k].splines[i][j](t) for t in t_dense] for k in range(2)]
-                #ax.plot(t_dense, A_vals, label=f"A[{i},{j}]")
-                ax.plot(A_vals[0], A_vals[1], linestyle='',marker=m,color=col)
-
-        ax.set_xlabel("Time")
-        ax.set_ylabel("A(t) elements")
-        ax.set_title(f"Time evolution of A(t) matrix elements s+=, npts,cmp variable")
-    #ax.legend(fontsize=8, ncol=3, loc="upper right", bbox_to_anchor=(1.3, 1))
-    plt.tight_layout()
-    #plt.xlim(-.0004,.0005)
-    #plt.ylim(-.0004,.0005)
-    plt.show()
 
 
 
-
-def nDMD(n):
-    return 2 + round(28 * (1 - math.tanh(0.015 * n)))
-def cDMD(n):
-    return 1 + round(29 * (1 - math.tanh(0.015 * n)))
 
 class HeatLearner:
     def __init__(self):
