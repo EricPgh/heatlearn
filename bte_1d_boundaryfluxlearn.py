@@ -183,7 +183,7 @@ def integrate(HL):
         #Navg = np.dot(H.T,decompose_field(HL.xcenter,Cs[:Nn].T[HL.Linert:HL.Mactive])) #Ts is the BTE solution and this operation with H measures the average T at the epoch start
         #print(rhs(t_0,c0))
         #print(rhs(t,c0))
-        if True:
+        if False:
             sol = solve_ivp(HL.prop.rhs, (t_0, t), c0, args=( bflux ), method='RK45', atol=1e-8, rtol=1e-6, max_step= (t-t_0)/10.)
             #print('t',sol.t)
             #print('y',sol.y[:, -1])
@@ -195,25 +195,29 @@ def integrate(HL):
                 plt.plot(HL.xcenter ,interp_temp(HL.xcenter,sol.y[:Nn,-1]),color=col)
             c0=c1 #update c_i solutions
         else:
-          t_i = t_0 #(t-t_0)/10.+t_0
-          dt = (t-t_0)/10.
-          while t_i<t: #lTimes[i]<t: #lTimes was recorded during formation of the propagators, this is the within-epoch integration loop that runs until the time value of the propagator reaches t, the epoch end
-            '''if i<7: #debugging
-                print(lAc[i])
-            else:
-                break'''
-            #The process is as such, the prior solution n0 and f0 are stacked and multiplied with current Ac (i'th) to provide dc(:=c1-c0)
-            #dc = prop.rhs(lTimes[i],c0) #lAc[i]@c0
-            dc = HL.prop.rhs(t_i,c0)
-            #however this difference is normalized by the minor stride interval (first deriv appx), but we are counting by major strides, so the difference, dc, needs to be scaled by major_stride to predict the increase of c2 over c1 when major_stride had elapsed
-            #This won't run correctly, it works when multiplied by the stride size in index space
-            #dc and rhs need to return in time space or be normalized by time step if SVD is impaired
-            #If multiplying by stride integer, dc needs to be time agnostic, if multiplying by dt, dc needs to be normalized by timestep (applied in rhs())
-            c1=c0+ dc*dt #major_stride*dc#*1.06 #e.g. +12*dc
-            #print(c2)
-            c0=c1 #update c_i solutions
-            i+=1
-          plt.plot(HL.xcenter ,interp_temp(HL.xcenter,c1[:Nn]),color=col)
+            t_i = t_0 #(t-t_0)/10.+t_0
+            dt = (t-t_0)/10.
+            while t_i<=t: #lTimes[i]<t: #lTimes was recorded during formation of the propagators, this is the within-epoch integration loop that runs until the time value of the propagator reaches t, the epoch end
+                '''if i<7: #debugging
+                    print(lAc[i])
+                else:
+                    break'''
+                #The process is as such, the prior solution n0 and f0 are stacked and multiplied with current Ac (i'th) to provide dc(:=c1-c0)
+                #dc = prop.rhs(lTimes[i],c0) #lAc[i]@c0
+                dc = HL.prop.rhs(t_i,c0)
+                #however this difference is normalized by the minor stride interval (first deriv appx), but we are counting by major strides, so the difference, dc, needs to be scaled by major_stride to predict the increase of c2 over c1 when major_stride had elapsed
+                #This won't run correctly, it works when multiplied by the stride size in index space
+                #dc and rhs need to return in time space or be normalized by time step if SVD is impaired
+                #If multiplying by stride integer, dc needs to be time agnostic, if multiplying by dt, dc needs to be normalized by timestep (applied in rhs())
+                c1=c0+ dc*dt #major_stride*dc#*1.06 #e.g. +12*dc
+                #print(c2)
+                c0=c1 #update c_i solutions
+                i+=1
+                if t-t_i>=dt
+                    t_i+=dt
+                else:
+                    t_i = t
+                plt.plot(HL.xcenter ,interp_temp(HL.xcenter,c1[:Nn]),color=col)
         plt.plot(HL.xcenter ,Cs[:Nn].T[HL.Linert:HL.Mactive],'o',color=col,markevery=100)
         #Navg_0 = Navg #Also part of an in-process corrector mechanism.
         t_0 = t
