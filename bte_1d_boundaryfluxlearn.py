@@ -213,7 +213,7 @@ def integrate(HL):
                 #print(c2)
                 c0=c1 #update c_i solutions
                 i+=1
-                if t-t_i>=dt
+                if t-t_i>=dt:
                     t_i+=dt
                 else:
                     t_i = t
