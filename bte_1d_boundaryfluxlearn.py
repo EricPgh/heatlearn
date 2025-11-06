@@ -197,14 +197,14 @@ def integrate(HL):
         else:
             t_i = t_0 #(t-t_0)/10.+t_0
             dt = (t-t_0)/10.
-            while t_i<=t: #lTimes[i]<t: #lTimes was recorded during formation of the propagators, this is the within-epoch integration loop that runs until the time value of the propagator reaches t, the epoch end
+            while t_i<t: #lTimes[i]<t: #lTimes was recorded during formation of the propagators, this is the within-epoch integration loop that runs until the time value of the propagator reaches t, the epoch end
                 '''if i<7: #debugging
                     print(lAc[i])
                 else:
                     break'''
                 #The process is as such, the prior solution n0 and f0 are stacked and multiplied with current Ac (i'th) to provide dc(:=c1-c0)
                 #dc = prop.rhs(lTimes[i],c0) #lAc[i]@c0
-                dc = HL.prop.rhs(t_i,c0)
+                dc = HL.prop.rhs(t_i,c0,bflux)
                 #however this difference is normalized by the minor stride interval (first deriv appx), but we are counting by major strides, so the difference, dc, needs to be scaled by major_stride to predict the increase of c2 over c1 when major_stride had elapsed
                 #This won't run correctly, it works when multiplied by the stride size in index space
                 #dc and rhs need to return in time space or be normalized by time step if SVD is impaired
