@@ -173,7 +173,7 @@ def integrate(HL):
     #print(Hp)
     
     #Begin integration
-    i=0
+    #i=0
     #Navg_0 = 1. #Tavg at start of epoch, 0.1 is just this dataset and needs updated
     t_0 = 0.
     #print('ts',ts[time_slice])
@@ -209,14 +209,14 @@ def integrate(HL):
                 #This won't run correctly, it works when multiplied by the stride size in index space
                 #dc and rhs need to return in time space or be normalized by time step if SVD is impaired
                 #If multiplying by stride integer, dc needs to be time agnostic, if multiplying by dt, dc needs to be normalized by timestep (applied in rhs())
-                c1=c0+ dc*dt #major_stride*dc#*1.06 #e.g. +12*dc
-                #print(c2)
-                c0=c1 #update c_i solutions
-                i+=1
                 if t-t_i>=dt:
                     t_i+=dt
                 else:
                     t_i = t
+                c1=c0+ dc*dt #major_stride*dc#*1.06 #e.g. +12*dc
+                #print(c2)
+                c0=c1 #update c_i solutions
+                #i+=1
                 plt.plot(HL.xcenter ,interp_temp(HL.xcenter,c1[:Nn]),color=col)
         plt.plot(HL.xcenter ,Cs[:Nn].T[HL.Linert:HL.Mactive],'o',color=col,markevery=100)
         #Navg_0 = Navg #Also part of an in-process corrector mechanism.
