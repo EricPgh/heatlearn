@@ -197,7 +197,7 @@ def integrate(HL):
         else:
             t_i = t_0 #(t-t_0)/10.+t_0
             dt = (t-t_0)/10.
-            while t_i<=t: #lTimes[i]<t: #lTimes was recorded during formation of the propagators, this is the within-epoch integration loop that runs until the time value of the propagator reaches t, the epoch end
+            while t_i<t: #lTimes[i]<t: #lTimes was recorded during formation of the propagators, this is the within-epoch integration loop that runs until the time value of the propagator reaches t, the epoch end
                 '''if i<7: #debugging
                     print(lAc[i])
                 else:
