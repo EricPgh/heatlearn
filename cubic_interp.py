@@ -42,4 +42,11 @@ class Propagator:
             return (self.A_of_t(t)@c*self.major_stride/(self.t_list[1]-self.t_list[0])).reshape(-1)  #(26,)
         if len(args) == 3:
             t, c, bv = args
+            #print(self.A_of_t(t))
+            return (self.A_of_t(t)@np.concatenate((c,bv),axis=0)*self.major_stride/(self.t_list[1]-self.t_list[0])).reshape(-1)  #(26,)
+        if len(args) == 4:
+            t, c, bv,bReturnA = args
+            #print(self.A_of_t(t))
+            if bReturnA:
+                return (self.A_of_t(t)@np.concatenate((c,bv),axis=0)*self.major_stride/(self.t_list[1]-self.t_list[0])).reshape(-1), self.A_of_t(t)*self.major_stride/(self.t_list[1]-self.t_list[0])
             return (self.A_of_t(t)@np.concatenate((c,bv),axis=0)*self.major_stride/(self.t_list[1]-self.t_list[0])).reshape(-1)  #(26,)

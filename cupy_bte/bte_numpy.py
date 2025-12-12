@@ -56,12 +56,13 @@ class BTEParams:
 
 
 class BTESolver:
-    def __init__(self, p: BTEParams):
+    def __init__(self, p: BTEParams, bReact=True):
+        self.bReact = bReact
         self.p = p
         self.x = np.linspace(0.0, p.L, p.Nx)
         self.dx = p.L / (p.Nx - 1)
         self.inventory = np.array([0.]*100+[1e8]*1848+[0.]*100).reshape((1,2048))
-        print(self.inventory)
+        #print(self.inventory)
 
         # Branch params as device arrays
         self.v = np.array(p.v,dtype=float)         # (2,)
@@ -70,7 +71,7 @@ class BTESolver:
         self.Ctot = float(np.sum(self.C))
 
         # State: g[i, s, x] with i in {0,1}, s in {0: +1, 1: -1}
-        self.g = np.zeros((2, 2, p.Nx), dtype=float)
+        self.g = np.zeros((len(self.v), 2, p.Nx), dtype=float)
 
         # Precompute stable dt from CFL and RTA
         vmax = float(np.max(np.abs(self.v)))
@@ -84,9 +85,13 @@ class BTESolver:
         # Boundary inflow values for g = C_i * ?T_inflow / 2 (split across directions)
         # Right-going (+): inflow at left boundary uses ?T_L
         # Left -going (-): inflow at right boundary uses ?T_R
-        self.g_in_L = (self.C * p.dTL / 2.0)[:, None]  # shape (2,1)
-        self.g_in_R = (self.C * p.dTR / 2.0)[:, None]  # shape (2,1)
-
+        self.g_in_L = (np.ones_like(self.C) * p.dTL / len(self.v))#[:, None]  # shape (2,1)
+        self.g_in_R = (np.ones_like(self.C) * p.dTR / len(self.v))#[:, None]  # shape (2,1)
+        self.g[:, 0, 0] = self.g_in_L#[:, 0]  # right-going at left boundary
+        self.g[:, 1, -1] = self.g_in_R#[:, 0] # left-going at right boundary
+        #print(np.sum(self.g,axis=(0,1))[[0,-1]])
+        #exit()
+        
     def step(self):
         p = self.p
         dt = self.dt
@@ -94,6 +99,7 @@ class BTESolver:
         v = self.v  # (2,)
         tau = self.tau  # (2,)
         g = self.g  # (2,2,Nx)
+        sink = 0.
 
         # Advection: first-order upwind, handled per direction
         # s_idx=0 corresponds to s=+1, s_idx=1 corresponds to s=-1
@@ -101,13 +107,13 @@ class BTESolver:
         g_plus = g[:, 0, :]  # (2,Nx)
         g_plus_up = np.roll(g_plus, 1, axis=-1) #Does numpy have roll()? let's hope
         # set upwind neighbor at the left boundary to inflow value
-        g_plus_up[:, 0] = self.g_in_L[:, 0]
+        g_plus_up[:, 0] = self.g_in_L#[:, 0]
         dgdx_plus = (g_plus - g_plus_up) / dx
 
         # For s=-1: ?g/?x ? (g[x+1] - g[x]) / dx, with inflow at x=L set to g_in_R
         g_minus = g[:, 1, :]
         g_minus_dn = np.roll(g_minus, -1, axis=-1)
-        g_minus_dn[:, -1] = self.g_in_R[:, 0]
+        g_minus_dn[:, -1] = self.g_in_R#[:, 0]
         dgdx_minus = (g_minus_dn - g_minus) / dx
 
         # Advection update: g_t = - s*v * dgdx - g/tau
@@ -118,21 +124,23 @@ class BTESolver:
         rhs_plus = - (+1.0) * (v2 * dgdx_plus) - (g_plus / tau2)
         rhs_minus = - (-1.0) * (v2 * dgdx_minus) - (g_minus / tau2)
 
-        rxn = np.sum(g, axis=1)*self.inventory*1e0
-        sink = rxn+100.
-        #print(rhs_plus.shape,rhs_minus.shape)
-        #print(g.shape,g[:,0,:].shape)
-        #print(sink.shape,self.inventory.shape)
-        #exit()
-        self.inventory -= dt*(rxn[0,:]+rxn[1,:])
-        self.inventory = np.maximum(self.inventory,np.zeros_like(self.inventory))
-        #sink = np.array([[min(0.,1-5*(i-1024)**2)]*2 for i in range(self.p.Nx)]).T
+        if self.bReact:
+            rxn = np.sum(g, axis=1)*self.inventory*1e0
+            sink = rxn+100.
+            #print(rhs_plus.shape,rhs_minus.shape)
+            #print(g.shape,g[:,0,:].shape)
+            #print(sink.shape,self.inventory.shape)
+            #exit()
+            self.inventory -= dt*(rxn[0,:]+rxn[1,:])
+            self.inventory = np.maximum(self.inventory,np.zeros_like(self.inventory))
+            #sink = np.array([[min(0.,1-5*(i-1024)**2)]*2 for i in range(self.p.Nx)]).T
         g[:, 0, :] = g_plus + dt * (rhs_plus - sink)
         g[:, 1, :] = g_minus + dt * (rhs_minus - sink)
 
         # Enforce inflow Dirichlet at boundaries explicitly after the update
-        g[:, 0, 0] = self.g_in_L[:, 0]  # right-going at left boundary
-        g[:, 1, -1] = self.g_in_R[:, 0] # left-going at right boundary
+        g[:, 0, 0] = self.g_in_L-np.mean(g[:, 1, 0]) #[:, 0]  # right-going at left boundary
+        g[:, 1, -1] = self.g_in_R-np.mean(g[:, 0, -1]) #[:, 0] # left-going at right boundary
+        
 
     def temperature(self) -> np.ndarray:
         # ? = (sum over i,s g_{i,s}) / ?_i C_i
@@ -156,7 +164,7 @@ class BTESolver:
                 Tsnaps.append(self.inventory)
                 flux.append(np.sum(self.g, axis=(0,1)).reshape((1,2048))) #I had to make this consistent with inventory. The way it came out was :,1,Nx size, not what I intended but currently works as its read by the learner code.
                 if progress:
-                    print(f"t = {t:.3e} s  (dt={self.dt:.3e}, step {n+1}/{nsteps})  Tmean={Ts.mean():+.3e} K")
+                    print(f"t = {t:.3e} s  (dt={self.dt:.3e}, step {n+1}/{nsteps})  FL={np.sum(self.g, axis=(0,1))[0]:+.3e} FR={np.sum(self.g, axis=(0,1))[-1]:+.3e}")
         print(np.array(flux).shape)
         print(np.array(Tsnaps).shape)
         if write_flux:
@@ -169,31 +177,71 @@ def demo():
     p = BTEParams(
         L=1e-3,
         Nx=2048,
-        v=(3000.0, 1500.0),
-        tau=(8e-3, 8e-3),
-        C=(1.0e7, 1.0e6),
+        v=[10000*(1-0.005*a) for a in range(100)], #(3000.0, 1500.0),
+        tau=[8e-7*(1-0.005*a) for a in range(100)], #(8e-3, 8e-3),
+        C=[1e7*(1+0.005*a) for a in range(100)], #(1.0e7, 1.0e6),
         dTL=1e0,      # +1 K at left
         dTR=3e0,     # -1 K at right
         cfl=0.9,
         t_final=2e-6,
         save_every=1e0,
     )
-    sides = ['left','right']
-    levels = [0.8,0.9,1.0,1.1,1.2]
-    for i,side in enumerate(sides):
-      for j,lev in enumerate(levels):
-        variant = f"_{side}{lev:.1f}"
-        if i==0:
-            p.dTL=lev
-            p.dRL=0.
-        else:
-            p.dTL=0.
-            p.dRL=lev
-        solver = BTESolver(p)
+    if False:
+        variant = f"_center"
+        p = BTEParams(
+            L=1e-3,
+            Nx=2048,
+            v=[10000*(1-0.005*a) for a in range(100)], #(3000.0, 1500.0),
+            tau=[8e-8*(1-0.005*a) for a in range(100)], #(8e-3, 8e-3),
+            C=[1e7*(1+0.005*a) for a in range(100)], #(1.0e7, 1.0e6),
+            dTL=1e0,      # +1 K at left
+            dTR=3e0,     # -1 K at right
+            cfl=0.9,
+            t_final=2e-6, #*3/10,
+            save_every=4, #1e0,
+        )
+        solver = BTESolver(p,bReact=False)
         ts, Tsnaps, flux = solver.run(progress=True, write_flux=True)
         with open(f'bte_1d_flux{variant}.pkl','wb') as file:
             pickle.dump([ts,Tsnaps,flux],file)
-
+        print('pickle written')
+    else:
+        sides = ['right','left']
+        levels = [1.0,0.8,0.9,1.1,1.2]
+        for i,side in enumerate(sides):
+          for j,lev in enumerate(levels):
+            variant = f"_{side}{lev:.1f}"
+            if i==1:
+                p = BTEParams(
+                    L=1e-3,
+                    Nx=2048,
+                    v=[10000*(1-0.005*a) for a in range(100)], #(3000.0, 1500.0),
+                    tau=[8e-8*(1-0.005*a) for a in range(100)], #(8e-3, 8e-3),
+                    C=[1e7*(1+0.005*a) for a in range(100)], #(1.0e7, 1.0e6),
+                    dTL=lev,      # +1 K at left
+                    dTR=0.,     # -1 K at right
+                    cfl=0.9,
+                    t_final=2e-6, #*3/10,
+                    save_every=4, #1e0,
+                )
+            else:
+                p = BTEParams(
+                    L=1e-3,
+                    Nx=2048,
+                    v=[10000*(1-0.005*a) for a in range(100)], #(3000.0, 1500.0),
+                    tau=[8e-8*(1-0.005*a) for a in range(100)], #(8e-3, 8e-3),
+                    C=[1e7*(1+0.005*a) for a in range(100)], #(1.0e7, 1.0e6),
+                    dTL=0.,      # +1 K at left
+                    dTR=lev,     # -1 K at right
+                    cfl=0.9,
+                    t_final=2e-6, #*3/10,
+                    save_every=4, #1e0,
+                )
+            solver = BTESolver(p,bReact=False)
+            ts, Tsnaps, flux = solver.run(progress=True, write_flux=True)
+            with open(f'bte_1d_flux{variant}.pkl','wb') as file:
+                pickle.dump([ts,Tsnaps,flux],file)
+            print('pickle written')
     if False:#try:
         import matplotlib.pyplot as plt
         import matplotlib as mpl

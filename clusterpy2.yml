@@ -1,0 +1,22 @@
+name: clusterpy3
+channels:
+  - conda-forge
+dependencies:
+  - python<3.13
+  - scipy
+  - numpy
+  - spyder
+  - mpi
+  - spglib
+  - phonopy
+  - ipykernel
+  - jupyter_client
+  - pyzmq
+  - setuptools
+  - scikit-learn
+  - pandas
+  - imageio
+  - aimsgb
+  - ase
+  - pymatgen
+prefix: /home/chameric/.conda/envs/clusterpy3
