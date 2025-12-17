@@ -57,6 +57,8 @@ class BTEParams:
 
 class BTESolver:
     def __init__(self, p: BTEParams, bReact=True):
+        from scipy.special import legendre
+        from numpy.polynomial.legendre import legval
         self.bReact = bReact
         self.p = p
         self.x = np.linspace(0.0, p.L, p.Nx)
@@ -81,7 +83,12 @@ class BTESolver:
         if p.dt_cap is not None:
             dt = min(dt, p.dt_cap)
         self.dt = dt
+        nsteps = int(np.ceil(p.t_final / dt))
+        t_max = nsteps*dt
 
+        #self.g_in_L = legval(np.linspace(-1.,1.,nsteps), p.dTL,tensor=False)
+        #legval(np.linspace(-1.,1.,nsteps), p.dTL,tensor=False)
+        
         # Boundary inflow values for g = C_i * ?T_inflow / 2 (split across directions)
         # Right-going (+): inflow at left boundary uses ?T_L
         # Left -going (-): inflow at right boundary uses ?T_R
@@ -208,31 +215,38 @@ def demo():
     else:
         sides = ['right','left']
         levels = [1.0,0.8,0.9,1.1,1.2]
+        degree = 1
         for i,side in enumerate(sides):
           for j,lev in enumerate(levels):
-            variant = f"_{side}{lev:.1f}"
+            variant = f"_deg{degree}_{side}{lev:.1f}"
             if i==1:
+                dTR = [0.]*2
+                dTL = [0.]*2
+                dTL[degree]=lev
                 p = BTEParams(
                     L=1e-3,
                     Nx=2048,
                     v=[10000*(1-0.005*a) for a in range(100)], #(3000.0, 1500.0),
                     tau=[8e-8*(1-0.005*a) for a in range(100)], #(8e-3, 8e-3),
                     C=[1e7*(1+0.005*a) for a in range(100)], #(1.0e7, 1.0e6),
-                    dTL=lev,      # +1 K at left
-                    dTR=0.,     # -1 K at right
+                    dTL=dTL,      # +1 K at left
+                    dTR=dTR,     # -1 K at right
                     cfl=0.9,
                     t_final=2e-6, #*3/10,
                     save_every=4, #1e0,
                 )
             else:
+                dTR = [0.]*2
+                dTL = [0.]*2
+                dTR[degree]=lev
                 p = BTEParams(
                     L=1e-3,
                     Nx=2048,
                     v=[10000*(1-0.005*a) for a in range(100)], #(3000.0, 1500.0),
                     tau=[8e-8*(1-0.005*a) for a in range(100)], #(8e-3, 8e-3),
                     C=[1e7*(1+0.005*a) for a in range(100)], #(1.0e7, 1.0e6),
-                    dTL=0.,      # +1 K at left
-                    dTR=lev,     # -1 K at right
+                    dTL=dTL,      # +1 K at left
+                    dTR=dTR,     # -1 K at right
                     cfl=0.9,
                     t_final=2e-6, #*3/10,
                     save_every=4, #1e0,
