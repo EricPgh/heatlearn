@@ -149,21 +149,23 @@ def buildGreensFunction(FL):
     from numpy.linalg import inv,pinv
     lX = []
     lY = []
-    for j,side in enumerate(FL.sides):
-        for k,lev in enumerate(FL.levels):
-            variant = f"_{side}{lev:.1f}"
-            idx = j  #which index of the boundary flux vector should get assigned the level
-            nidx = len(FL.sides)#*ndeg_bv #what is the dimension of the boundary flux vector, only operating with 1 degree (constant)
-    
-            B0 = np.zeros( (nidx,1) );B0[idx,:] = lev
-            #print(N0.shape,F0.shape)
-            #The priors X, are a composite of two coupled observations [N0;F0], both contributing to the prediction of Y, hence the A matrix has twice the size containing how Y evolves from each group of prior observations
-            #Adding to this are the boundary flux levels which should impact the F posteriors
-            lX.append( B0 )
-            #print(i,X.shape)
-            #Here Y is defined as the rate of change of observations. Alternatively could use just an observation of the system, but the physics being studied are nonlinear second order ODE (or nonlinear system of two first order ODE)
-            F1 = np.array(FL.dGF[variant][0][100:101]).T
-            lY.append( F1 ) #The posteriors Y, are a composite of two coupled difference observations [dN/dt;dF/dt], e.g. the state of Y, hence the A matrix has 4x4 block form containing how Y evolves from each group of prior observations
+    ndeg=2
+    for deg in range(ndeg):
+        for j,side in enumerate(FL.sides):
+            for k,lev in enumerate(FL.levels):
+                variant = f"_{side}{lev:.1f}"
+                idx = j  #which index of the boundary flux vector should get assigned the level
+                nidx = len(ndeg*FL.sides)#*ndeg_bv #what is the dimension of the boundary flux vector, only operating with 1 degree (constant)
+        
+                B0 = np.zeros( (nidx,1) );B0[ndeg*deg+idx,:] = lev
+                #print(N0.shape,F0.shape)
+                #The priors X, are a composite of two coupled observations [N0;F0], both contributing to the prediction of Y, hence the A matrix has twice the size containing how Y evolves from each group of prior observations
+                #Adding to this are the boundary flux levels which should impact the F posteriors
+                lX.append( B0 )
+                #print(i,X.shape)
+                #Here Y is defined as the rate of change of observations. Alternatively could use just an observation of the system, but the physics being studied are nonlinear second order ODE (or nonlinear system of two first order ODE)
+                F1 = np.array(FL.dGF[deg][variant][0][100:101]).T
+                lY.append( F1 ) #The posteriors Y, are a composite of two coupled difference observations [dN/dt;dF/dt], e.g. the state of Y, hence the A matrix has 4x4 block form containing how Y evolves from each group of prior observations
     #It can be seen that the Y observation is X1-X0 while the X observation is X0. Thus the system behavior being trained is X1-X0 = A(X0). Given X0, the A propagator will yield X1-X0 and then X0. This Y observation is divided by the minor stride timestep to yield a proper first derivative approximate
     X = np.concatenate(lX,axis=1)
     u,s,vt = svd(X,full_matrices=False) #full matrices=false, want to be able to compress, S has nonzero only
@@ -189,21 +191,22 @@ def buildGreensFunction(FL):
         for i in range(nA):
             lX = []
             lY = []
-            for j,side in enumerate(FL.sides):
-                for k,lev in enumerate(FL.levels):
-                    variant = f"_{side}{lev:.1f}"
-                    idx = j  #which index of the boundary flux vector should get assigned the level
-                    nidx = len(FL.sides)#*ndeg_bv #what is the dimension of the boundary flux vector, only operating with 1 degree (constant)
-    
-                    B0 = np.zeros( (nidx,1) );B0[idx,:] = lev
-                    #print(N0.shape,F0.shape)
-                    #The priors X, are a composite of two coupled observations [N0;F0], both contributing to the prediction of Y, hence the A matrix has twice the size containing how Y evolves from each group of prior observations
-                    #Adding to this are the boundary flux levels which should impact the F posteriors
-                    lX.append( B0 )
-                    #print(i,X.shape)
-                    #Here Y is defined as the rate of change of observations. Alternatively could use just an observation of the system, but the physics being studied are nonlinear second order ODE (or nonlinear system of two first order ODE)
-                    F1 = np.array(FL.dGF[variant][0][strt+i*major_stride:strt+i*major_stride+1]).T
-                    lY.append( F1 ) #The posteriors Y, are a composite of two coupled difference observations [dN/dt;dF/dt], e.g. the state of Y, hence the A matrix has 4x4 block form containing how Y evolves from each group of prior observations
+            for deg in range(ndeg):
+                for j,side in enumerate(FL.sides):
+                    for k,lev in enumerate(FL.levels):
+                        variant = f"_{side}{lev:.1f}"
+                        idx = j  #which index of the boundary flux vector should get assigned the level
+                        nidx = len(ndeg*FL.sides)#*ndeg_bv #what is the dimension of the boundary flux vector, only operating with 1 degree (constant)
+        
+                        B0 = np.zeros( (nidx,1) );B0[ndeg*deg+idx,:] = lev
+                        #print(N0.shape,F0.shape)
+                        #The priors X, are a composite of two coupled observations [N0;F0], both contributing to the prediction of Y, hence the A matrix has twice the size containing how Y evolves from each group of prior observations
+                        #Adding to this are the boundary flux levels which should impact the F posteriors
+                        lX.append( B0 )
+                        #print(i,X.shape)
+                        #Here Y is defined as the rate of change of observations. Alternatively could use just an observation of the system, but the physics being studied are nonlinear second order ODE (or nonlinear system of two first order ODE)
+                        F1 = np.array(FL.dGF[deg][variant][0][strt+i*major_stride:strt+i*major_stride+1]).T
+                        lY.append( F1 ) #The posteriors Y, are a composite of two coupled difference observations [dN/dt;dF/dt], e.g. the state of Y, hence the A matrix has 4x4 block form containing how Y evolves from each group of prior observations
             #It can be seen that the Y observation is X1-X0 while the X observation is X0. Thus the system behavior being trained is X1-X0 = A(X0). Given X0, the A propagator will yield X1-X0 and then X0. This Y observation is divided by the minor stride timestep to yield a proper first derivative approximate
             X = np.concatenate(lX,axis=1)
             u,s,vt = svd(X,full_matrices=False) #full matrices=false, want to be able to compress, S has nonzero only
@@ -220,7 +223,7 @@ def buildGreensFunction(FL):
             W = LLvt.T@inv(LLs)@LLu.T@Ac
             lAc.append(Ac) #this will contain a time evolution of differential propagators
             #lTimes.append(ts[strt+i*major_stride+minor_stride]/2+ts[strt+i*major_stride+npts*minor_stride]/2) #here I'm sampling times at the same rate (major_stride) such that I have time positions aligned with Ac transforms
-            lTimes.append(FL.dTS[variant][strt+i*major_stride])#/2+ts[strt+(i+1)*major_stride]/2) #here I'm sampling times at the same rate (major_stride) such that I have time positions aligned with Ac transforms
+            lTimes.append(FL.dTS[0][variant][strt+i*major_stride])#/2+ts[strt+(i+1)*major_stride]/2) #here I'm sampling times at the same rate (major_stride) such that I have time positions aligned with Ac transforms
             #This might not be occuring the way I imagine it. Maybe I should just get the delta_t and increment that in the integration loop
         #print(lTimes[0])
         FL.prop.buildMe(lTimes,lAc)
@@ -375,9 +378,9 @@ def integrate(FL,prop=None):
     
 def convolve(FL,LegLap=None):
     if True:
-        with open(f"bte_1d_flux_center.pkl", "rb") as f:
+        with open(f"bte_1d_flux_ramp.pkl", "rb") as f:
             ts, npop, flux = pickle.load(f) #next time I should have x, xcenter come through the pickle
-        bflux = np.array([1.,3.])
+        bflux = np.array([0.5,1.5,0.5,1.5]) #1.,3.])
     else:
         with open(f"bte_1d_flux_right1.0.pkl", "rb") as f:
             ts, npop, flux = pickle.load(f) #next time I should have x, xcenter come through the pickle
@@ -400,7 +403,7 @@ def convolve(FL,LegLap=None):
     #print(c)
     nepoch=30 #I'm defining each epoch to be the period I'm running parallel integration alongside BTE solutions. Comparison happens at the epoch end. 
     time_slice =np.linspace(100,11000,nepoch,dtype=int) #these i values are the epoch end points, so the first epoch runs 
-    time_slice = time_slice[0:10]
+    time_slice = time_slice#[0:10]
     #from i=0 to i=100, the next i=100 to i=590
     #Notably I reused the list time_slice here. Previously it was returned by the loadGinterpolants(1) call and had a facile step of 1, here its being reused to define the epoch stepping
     
@@ -461,7 +464,7 @@ def convolve(FL,LegLap=None):
                 c0=c1 #update c_i solutions
                 #print(c0)
                 #i+=1
-                if t_i == t or i_t%ncurve==0:
+                if t_i == t:# or i_t%ncurve==0:
                     plt.plot(FL.x ,interp_temp(FL.x,c1),color=col)
                 i_t+=1
         #plt.plot(FL.xcenter ,Cs.T[FL.Linert:FL.Mactive],'o',color=col,markevery=100)

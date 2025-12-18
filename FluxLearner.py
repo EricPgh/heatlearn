@@ -92,36 +92,38 @@ class FluxLearner:
         self.xcenter = self.x[self.Linert:self.Mactive]
         self.sides = ['left','right']
         self.levels = [0.8,0.9,1.0,1.1,1.2]
-        self.dTS = {}
-        self.dFLUX = {}
+        self.dTS = [{},{},{}]
+        self.dFLUX = [{},{},{}]
         #encoding = "_{side}{lev:.1f}"
-        for i,side in enumerate(self.sides):
-          for j,lev in enumerate(self.levels):
-            variant = f"_{side}{lev:.1f}"
-            with open(f"bte_1d_flux{variant}.pkl", "rb") as f:
-                ts, npop, flux = pickle.load(f) #next time I should have x, xcenter come through the pickle
-            flux *= self.mflux
-            self.Funits = '[1e9]'
-            ts *= self.mts
-            self.Tunits = '[1e-10]' #'[1e-6]'
-            self.dTS[variant] = ts[:]
-            self.dFLUX[variant] = flux[:]
-        variant = f"_center"
+        for deg in range(2):
+            for i,side in enumerate(self.sides):
+                for j,lev in enumerate(self.levels):
+                    variant = f"_{side}{lev:.1f}"
+                    with open(f"bte_1d_flux_deg{deg}{variant}.pkl", "rb") as f:
+                        ts, npop, flux = pickle.load(f) #next time I should have x, xcenter come through the pickle
+                    flux *= self.mflux
+                    self.Funits = '[1e9]'
+                    ts *= self.mts
+                    self.Tunits = '[1e-10]' #'[1e-6]'
+                    self.dTS[deg][variant] = ts[:]
+                    self.dFLUX[deg][variant] = flux[:]
+        variant = f"_ramp"
         with open(f"bte_1d_flux{variant}.pkl", "rb") as f:
             ts, npop, flux = pickle.load(f) #next time I should have x, xcenter come through the pickle
         flux *= self.mflux
         self.Funits = '[1e9]'
         ts *= self.mts
         self.Tunits = '[1e-10]' #'[1e-6]'
-        self.dTS[variant] = ts[:]
-        self.dFLUX[variant] = flux[:]
+        self.dTS[2][variant] = ts[:]
+        self.dFLUX[2][variant] = flux[:]
         self.deg_Leg = 24
-        self.dGF = {}
+        self.dGF =  [{},{},{}]
         self.prop = Propagator()
 
     def digest_fields(self):
-        for i,side in enumerate(self.sides):
-            for j,lev in enumerate(self.levels):
-                variant = f"_{side}{lev:.1f}"
-                self.dGF[variant] = loadGinterpolants(self,self.dTS[variant], self.dFLUX[variant], 1, self.deg_Leg)
+        for deg in range(2):
+            for i,side in enumerate(self.sides):
+                for j,lev in enumerate(self.levels):
+                    variant = f"_{side}{lev:.1f}"
+                    self.dGF[deg][variant] = loadGinterpolants(self,self.dTS[deg][variant], self.dFLUX[deg][variant], 1, self.deg_Leg)
 

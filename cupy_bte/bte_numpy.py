@@ -71,6 +71,7 @@ class BTESolver:
         self.tau = np.array(p.tau,dtype=float)     # (2,)
         self.C = np.array(p.C,dtype=float)         # (2,)
         self.Ctot = float(np.sum(self.C))
+        self.Ngrp = len(self.v)
 
         # State: g[i, s, x] with i in {0,1}, s in {0: +1, 1: -1}
         self.g = np.zeros((len(self.v), 2, p.Nx), dtype=float)
@@ -86,20 +87,20 @@ class BTESolver:
         nsteps = int(np.ceil(p.t_final / dt))
         t_max = nsteps*dt
 
-        #self.g_in_L = legval(np.linspace(-1.,1.,nsteps), p.dTL,tensor=False)
-        #legval(np.linspace(-1.,1.,nsteps), p.dTL,tensor=False)
+        self.g_in_L = np.outer(legval(np.linspace(-1.,1.,nsteps), p.dTL,tensor=False)/self.Ngrp,np.ones_like(self.C))
+        self.g_in_R = np.outer(legval(np.linspace(-1.,1.,nsteps), p.dTR,tensor=False)/self.Ngrp,np.ones_like(self.C))
         
         # Boundary inflow values for g = C_i * ?T_inflow / 2 (split across directions)
         # Right-going (+): inflow at left boundary uses ?T_L
         # Left -going (-): inflow at right boundary uses ?T_R
-        self.g_in_L = (np.ones_like(self.C) * p.dTL / len(self.v))#[:, None]  # shape (2,1)
-        self.g_in_R = (np.ones_like(self.C) * p.dTR / len(self.v))#[:, None]  # shape (2,1)
-        self.g[:, 0, 0] = self.g_in_L#[:, 0]  # right-going at left boundary
-        self.g[:, 1, -1] = self.g_in_R#[:, 0] # left-going at right boundary
+        #self.g_in_L = (np.ones_like(self.C) * p.dTL / len(self.v))#[:, None]  # shape (2,1)
+        #self.g_in_R = (np.ones_like(self.C) * p.dTR / len(self.v))#[:, None]  # shape (2,1)
+        self.g[:, 0, 0] = self.g_in_L[0,:] #[:, 0]  # right-going at left boundary
+        self.g[:, 1, -1] = self.g_in_R[0,:] #[:, 0] # left-going at right boundary
         #print(np.sum(self.g,axis=(0,1))[[0,-1]])
         #exit()
         
-    def step(self):
+    def step(self,n):
         p = self.p
         dt = self.dt
         dx = self.dx
@@ -114,13 +115,13 @@ class BTESolver:
         g_plus = g[:, 0, :]  # (2,Nx)
         g_plus_up = np.roll(g_plus, 1, axis=-1) #Does numpy have roll()? let's hope
         # set upwind neighbor at the left boundary to inflow value
-        g_plus_up[:, 0] = self.g_in_L#[:, 0]
+        g_plus_up[:, 0] = self.g_in_L[n,:] #[:, 0]
         dgdx_plus = (g_plus - g_plus_up) / dx
 
         # For s=-1: ?g/?x ? (g[x+1] - g[x]) / dx, with inflow at x=L set to g_in_R
         g_minus = g[:, 1, :]
         g_minus_dn = np.roll(g_minus, -1, axis=-1)
-        g_minus_dn[:, -1] = self.g_in_R#[:, 0]
+        g_minus_dn[:, -1] = self.g_in_R[n,:] #[:, 0]
         dgdx_minus = (g_minus_dn - g_minus) / dx
 
         # Advection update: g_t = - s*v * dgdx - g/tau
@@ -145,8 +146,8 @@ class BTESolver:
         g[:, 1, :] = g_minus + dt * (rhs_minus - sink)
 
         # Enforce inflow Dirichlet at boundaries explicitly after the update
-        g[:, 0, 0] = self.g_in_L-np.mean(g[:, 1, 0]) #[:, 0]  # right-going at left boundary
-        g[:, 1, -1] = self.g_in_R-np.mean(g[:, 0, -1]) #[:, 0] # left-going at right boundary
+        g[:, 0, 0] = self.g_in_L[n,:] -np.mean(g[:, 1, 0]) #[:, 0]  # right-going at left boundary
+        g[:, 1, -1] = self.g_in_R[n,:] -np.mean(g[:, 0, -1]) #[:, 0] # left-going at right boundary
         
 
     def temperature(self) -> np.ndarray:
@@ -162,7 +163,7 @@ class BTESolver:
         every = max(1, self.p.save_every)
 
         for n in range(nsteps):
-            self.step()
+            self.step(n)
             t += self.dt
             if n % every == 0 or n == nsteps - 1:
                 Ts = self.temperature()  # host copy for diagnostics
@@ -193,16 +194,22 @@ def demo():
         t_final=2e-6,
         save_every=1e0,
     )
-    if False:
-        variant = f"_center"
+    if True:
+        variant = f"_cycle"
         p = BTEParams(
             L=1e-3,
             Nx=2048,
             v=[10000*(1-0.005*a) for a in range(100)], #(3000.0, 1500.0),
             tau=[8e-8*(1-0.005*a) for a in range(100)], #(8e-3, 8e-3),
             C=[1e7*(1+0.005*a) for a in range(100)], #(1.0e7, 1.0e6),
-            dTL=1e0,      # +1 K at left
-            dTR=3e0,     # -1 K at right
+            dTL=[ 8.9e+00,  2.0e-15, -6.9e+00, -3.0e-16, -3.4e+00, -3.1e-15,  1.2e+00, -1.5e-15,
+                9.3e-01,  2.7e-15, -8.2e-01,  2.6e-15, -2.3e-01,  1.8e-15,  6.0e-01,  2.6e-15,
+                -5.6e-02,  7.6e-16, -3.8e-01, -2.9e-15,  2.0e-01, -3.2e-15,  2.1e-01, -6.3e-16,
+                -2.4e-01],      # +1 K at left
+            dTR=[ 7.3e+00,  1.1e-15, -5.6e+00,  3.6e-16, -2.8e+00, -2.8e-15,  9.9e-01, -1.7e-15,
+                7.6e-01,  1.0e-15, -6.7e-01,  3.5e-16, -1.9e-01, -4.4e-16,  4.9e-01,  3.6e-16,
+                -4.6e-02, -4.0e-16, -3.1e-01, -2.6e-15,  1.7e-01, -2.0e-15,  1.7e-01,  5.3e-16,
+                -2.0e-01],     # -1 K at right
             cfl=0.9,
             t_final=2e-6, #*3/10,
             save_every=4, #1e0,
@@ -215,47 +222,48 @@ def demo():
     else:
         sides = ['right','left']
         levels = [1.0,0.8,0.9,1.1,1.2]
-        degree = 1
-        for i,side in enumerate(sides):
-          for j,lev in enumerate(levels):
-            variant = f"_deg{degree}_{side}{lev:.1f}"
-            if i==1:
-                dTR = [0.]*2
-                dTL = [0.]*2
-                dTL[degree]=lev
-                p = BTEParams(
-                    L=1e-3,
-                    Nx=2048,
-                    v=[10000*(1-0.005*a) for a in range(100)], #(3000.0, 1500.0),
-                    tau=[8e-8*(1-0.005*a) for a in range(100)], #(8e-3, 8e-3),
-                    C=[1e7*(1+0.005*a) for a in range(100)], #(1.0e7, 1.0e6),
-                    dTL=dTL,      # +1 K at left
-                    dTR=dTR,     # -1 K at right
-                    cfl=0.9,
-                    t_final=2e-6, #*3/10,
-                    save_every=4, #1e0,
-                )
-            else:
-                dTR = [0.]*2
-                dTL = [0.]*2
-                dTR[degree]=lev
-                p = BTEParams(
-                    L=1e-3,
-                    Nx=2048,
-                    v=[10000*(1-0.005*a) for a in range(100)], #(3000.0, 1500.0),
-                    tau=[8e-8*(1-0.005*a) for a in range(100)], #(8e-3, 8e-3),
-                    C=[1e7*(1+0.005*a) for a in range(100)], #(1.0e7, 1.0e6),
-                    dTL=dTL,      # +1 K at left
-                    dTR=dTR,     # -1 K at right
-                    cfl=0.9,
-                    t_final=2e-6, #*3/10,
-                    save_every=4, #1e0,
-                )
-            solver = BTESolver(p,bReact=False)
-            ts, Tsnaps, flux = solver.run(progress=True, write_flux=True)
-            with open(f'bte_1d_flux{variant}.pkl','wb') as file:
-                pickle.dump([ts,Tsnaps,flux],file)
-            print('pickle written')
+        ndeg=25
+        for degree in range(4,ndeg):
+            for i,side in enumerate(sides):
+              for j,lev in enumerate(levels):
+                variant = f"_deg{degree}_{side}{lev:.1f}"
+                if i==1:
+                    dTR = [0.]*ndeg
+                    dTL = [0.]*ndeg
+                    dTL[degree]=lev
+                    p = BTEParams(
+                        L=1e-3,
+                        Nx=2048,
+                        v=[10000*(1-0.005*a) for a in range(100)], #(3000.0, 1500.0),
+                        tau=[8e-8*(1-0.005*a) for a in range(100)], #(8e-3, 8e-3),
+                        C=[1e7*(1+0.005*a) for a in range(100)], #(1.0e7, 1.0e6),
+                        dTL=dTL,      # +1 K at left
+                        dTR=dTR,     # -1 K at right
+                        cfl=0.9,
+                        t_final=2e-6, #*3/10,
+                        save_every=4, #1e0,
+                    )
+                else:
+                    dTR = [0.]*ndeg
+                    dTL = [0.]*ndeg
+                    dTR[degree]=lev
+                    p = BTEParams(
+                        L=1e-3,
+                        Nx=2048,
+                        v=[10000*(1-0.005*a) for a in range(100)], #(3000.0, 1500.0),
+                        tau=[8e-8*(1-0.005*a) for a in range(100)], #(8e-3, 8e-3),
+                        C=[1e7*(1+0.005*a) for a in range(100)], #(1.0e7, 1.0e6),
+                        dTL=dTL,      # +1 K at left
+                        dTR=dTR,     # -1 K at right
+                        cfl=0.9,
+                        t_final=2e-6, #*3/10,
+                        save_every=4, #1e0,
+                    )
+                solver = BTESolver(p,bReact=False)
+                ts, Tsnaps, flux = solver.run(progress=True, write_flux=True)
+                with open(f'bte_1d_flux{variant}.pkl','wb') as file:
+                    pickle.dump([ts,Tsnaps,flux],file)
+                print('pickle written')
     if False:#try:
         import matplotlib.pyplot as plt
         import matplotlib as mpl
