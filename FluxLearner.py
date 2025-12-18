@@ -92,10 +92,11 @@ class FluxLearner:
         self.xcenter = self.x[self.Linert:self.Mactive]
         self.sides = ['left','right']
         self.levels = [0.8,0.9,1.0,1.1,1.2]
-        self.dTS = [{},{},{}]
-        self.dFLUX = [{},{},{}]
+        self.ndeg = 3
+        self.dTS = [{} for _ in range(self.ndeg+1)]
+        self.dFLUX = [{} for _ in range(self.ndeg+1)]
         #encoding = "_{side}{lev:.1f}"
-        for deg in range(2):
+        for deg in range(self.ndeg):
             for i,side in enumerate(self.sides):
                 for j,lev in enumerate(self.levels):
                     variant = f"_{side}{lev:.1f}"
@@ -114,14 +115,14 @@ class FluxLearner:
         self.Funits = '[1e9]'
         ts *= self.mts
         self.Tunits = '[1e-10]' #'[1e-6]'
-        self.dTS[2][variant] = ts[:]
-        self.dFLUX[2][variant] = flux[:]
+        self.dTS[self.ndeg][variant] = ts[:]
+        self.dFLUX[self.ndeg][variant] = flux[:]
         self.deg_Leg = 24
-        self.dGF =  [{},{},{}]
+        self.dGF =  [{} for _ in range(self.ndeg+1)]
         self.prop = Propagator()
 
     def digest_fields(self):
-        for deg in range(2):
+        for deg in range(self.ndeg):
             for i,side in enumerate(self.sides):
                 for j,lev in enumerate(self.levels):
                     variant = f"_{side}{lev:.1f}"

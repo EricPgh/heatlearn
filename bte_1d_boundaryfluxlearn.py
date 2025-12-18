@@ -155,9 +155,9 @@ def buildGreensFunction(FL):
             for k,lev in enumerate(FL.levels):
                 variant = f"_{side}{lev:.1f}"
                 idx = j  #which index of the boundary flux vector should get assigned the level
-                nidx = len(ndeg*FL.sides)#*ndeg_bv #what is the dimension of the boundary flux vector, only operating with 1 degree (constant)
+                nidx = ndeg*len(FL.sides)#*ndeg_bv #what is the dimension of the boundary flux vector
         
-                B0 = np.zeros( (nidx,1) );B0[ndeg*deg+idx,:] = lev
+                B0 = np.zeros( (nidx,1) );B0[len(FL.sides)*deg+idx,:] = lev
                 #print(N0.shape,F0.shape)
                 #The priors X, are a composite of two coupled observations [N0;F0], both contributing to the prediction of Y, hence the A matrix has twice the size containing how Y evolves from each group of prior observations
                 #Adding to this are the boundary flux levels which should impact the F posteriors
@@ -196,9 +196,9 @@ def buildGreensFunction(FL):
                     for k,lev in enumerate(FL.levels):
                         variant = f"_{side}{lev:.1f}"
                         idx = j  #which index of the boundary flux vector should get assigned the level
-                        nidx = len(ndeg*FL.sides)#*ndeg_bv #what is the dimension of the boundary flux vector, only operating with 1 degree (constant)
+                        nidx = ndeg*len(FL.sides)#*ndeg_bv #what is the dimension of the boundary flux vector
         
-                        B0 = np.zeros( (nidx,1) );B0[ndeg*deg+idx,:] = lev
+                        B0 = np.zeros( (nidx,1) );B0[len(FL.sides)*deg+idx,:] = lev
                         #print(N0.shape,F0.shape)
                         #The priors X, are a composite of two coupled observations [N0;F0], both contributing to the prediction of Y, hence the A matrix has twice the size containing how Y evolves from each group of prior observations
                         #Adding to this are the boundary flux levels which should impact the F posteriors
