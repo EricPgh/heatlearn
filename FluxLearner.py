@@ -119,6 +119,7 @@ class FluxLearner:
         self.dFLUX[self.ndeg][variant] = flux[:]
         self.deg_Leg = 24
         self.dGF =  [{} for _ in range(self.ndeg+1)]
+        self.Ginf = None
         self.prop = Propagator()
 
     def digest_fields(self):

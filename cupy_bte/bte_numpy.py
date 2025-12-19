@@ -63,7 +63,8 @@ class BTESolver:
         self.p = p
         self.x = np.linspace(0.0, p.L, p.Nx)
         self.dx = p.L / (p.Nx - 1)
-        self.inventory = np.array([0.]*100+[1e8]*1848+[0.]*100).reshape((1,2048))
+        self.load = 1.0e0 #this value from 1.0 to 55.0 showed a broad range of flux response from the zero reaction ramp case.
+        self.inventory = np.array([0.]*100+[self.load]*1848+[0.]*100).reshape((1,2048))
         #print(self.inventory)
 
         # Branch params as device arrays
@@ -133,17 +134,22 @@ class BTESolver:
         rhs_minus = - (-1.0) * (v2 * dgdx_minus) - (g_minus / tau2)
 
         if self.bReact:
-            rxn = np.sum(g, axis=1)*self.inventory*1e0
-            sink = rxn+100.
+            #Gain of 1e5 left extremal reduction by 8% in half of simulation time.
+            #Gain of 1e6 left extremal reduction by 50% in half of simulation time.
+            rxn = dt*np.sum(np.abs(np.sum(g, axis=1))*self.inventory*1e6,axis=0).reshape((1,-1)) 
             #print(rhs_plus.shape,rhs_minus.shape)
             #print(g.shape,g[:,0,:].shape)
             #print(sink.shape,self.inventory.shape)
             #exit()
-            self.inventory -= dt*(rxn[0,:]+rxn[1,:])
-            self.inventory = np.maximum(self.inventory,np.zeros_like(self.inventory))
+            rxn = np.min(np.concatenate([rxn,self.inventory]).reshape(2,-1),axis=0)
+            sink = rxn#+100.
+            #print(rxn)
+            #exit()
+            self.inventory -= rxn #dt*np.sum(rxn,axis=0) #rxn[0,:]+rxn[1,:])
+            #self.inventory = np.maximum(self.inventory,np.zeros_like(self.inventory))
             #sink = np.array([[min(0.,1-5*(i-1024)**2)]*2 for i in range(self.p.Nx)]).T
-        g[:, 0, :] = g_plus + dt * (rhs_plus - sink)
-        g[:, 1, :] = g_minus + dt * (rhs_minus - sink)
+        g[:, 0, :] = g_plus + dt * rhs_plus - sink/2/self.Ngrp #removed dt because its done above
+        g[:, 1, :] = g_minus + dt * rhs_minus - sink/2/self.Ngrp #removed dt because its done above
 
         # Enforce inflow Dirichlet at boundaries explicitly after the update
         g[:, 0, 0] = self.g_in_L[n,:] -np.mean(g[:, 1, 0]) #[:, 0]  # right-going at left boundary
@@ -169,10 +175,15 @@ class BTESolver:
                 Ts = self.temperature()  # host copy for diagnostics
                 ts.append(t)
                 #Tsnaps.append(Ts)
-                Tsnaps.append(self.inventory)
+                Tsnaps.append(self.inventory.copy())
                 flux.append(np.sum(self.g, axis=(0,1)).reshape((1,2048))) #I had to make this consistent with inventory. The way it came out was :,1,Nx size, not what I intended but currently works as its read by the learner code.
+                #if t >=2e-7:
+                #    break
+                #    print(Tsnaps)
+                #    exit()
                 if progress:
-                    print(f"t = {t:.3e} s  (dt={self.dt:.3e}, step {n+1}/{nsteps})  FL={np.sum(self.g, axis=(0,1))[0]:+.3e} FR={np.sum(self.g, axis=(0,1))[-1]:+.3e}")
+                    #print(f"t = {t:.3e} s  (dt={self.dt:.3e}, step {n+1}/{nsteps})  FL={np.sum(self.g, axis=(0,1))[0]:+.3e} FR={np.sum(self.g, axis=(0,1))[-1]:+.3e}")
+                    print(f"t = {t:.3e} s  (dt={self.dt:.3e}, step {n+1}/{nsteps})  NL={self.inventory[0,100]:+.3e} NR={self.inventory[0,1947]:+.3e}")
         print(np.array(flux).shape)
         print(np.array(Tsnaps).shape)
         if write_flux:
@@ -195,6 +206,25 @@ def demo():
         save_every=1e0,
     )
     if True:
+        variant = f"_ramp_rxn1.0"
+        p = BTEParams(
+            L=1e-3,
+            Nx=2048,
+            v=[10000*(1-0.005*a) for a in range(100)], #(3000.0, 1500.0),
+            tau=[8e-8*(1-0.005*a) for a in range(100)], #(8e-3, 8e-3),
+            C=[1e7*(1+0.005*a) for a in range(100)], #(1.0e7, 1.0e6),
+            dTL=[0.5,0.5,0.],      # +1 K at left
+            dTR=[1.5,1.5,0.],     # -1 K at right
+            cfl=0.9,
+            t_final=2e-6, #*3/10,
+            save_every=4, #1e0,
+        )
+        solver = BTESolver(p,bReact=True)
+        ts, Tsnaps, flux = solver.run(progress=True, write_flux=True)
+        with open(f'bte_1d_flux{variant}.pkl','wb') as file:
+            pickle.dump([ts,Tsnaps,flux],file)
+        print('pickle written')
+    elif False:
         variant = f"_cycle"
         p = BTEParams(
             L=1e-3,
