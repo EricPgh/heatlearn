@@ -48,6 +48,7 @@ class BTEParams:
     C: Tuple[float, float] = (1.0e6, 1.0e6)    # branch heat capacities [J/(m^3 K)]
     dTL: float = 1.0                 # ?T at x=0 for right-going phonons [K]
     dTR: float = -1.0                # ?T at x=L for left-going phonons [K]
+    load: float = 50.0
     cfl: float = 0.9                 # CFL number (<= 1 for upwind)
     dt_cap: Optional[float] = None   # optional hard cap on dt [s]
     t_final: float = 2e-6            # final time [s]
@@ -63,7 +64,7 @@ class BTESolver:
         self.p = p
         self.x = np.linspace(0.0, p.L, p.Nx)
         self.dx = p.L / (p.Nx - 1)
-        self.load = 1.0e0 #this value from 1.0 to 55.0 showed a broad range of flux response from the zero reaction ramp case.
+        self.load = p.load #100.0e0 #this value from 1.0 to 55.0 showed a broad range of flux response from the zero reaction ramp case.
         self.inventory = np.array([0.]*100+[self.load]*1848+[0.]*100).reshape((1,2048))
         #print(self.inventory)
 
@@ -136,12 +137,14 @@ class BTESolver:
         if self.bReact:
             #Gain of 1e5 left extremal reduction by 8% in half of simulation time.
             #Gain of 1e6 left extremal reduction by 50% in half of simulation time.
-            rxn = dt*np.sum(np.abs(np.sum(g, axis=1))*self.inventory*1e6,axis=0).reshape((1,-1)) 
+            rxn = dt*np.sum(np.sum(g, axis=1)*self.inventory*1e6,axis=0).reshape((1,-1)) 
             #print(rhs_plus.shape,rhs_minus.shape)
             #print(g.shape,g[:,0,:].shape)
             #print(sink.shape,self.inventory.shape)
             #exit()
-            rxn = np.min(np.concatenate([rxn,self.inventory]).reshape(2,-1),axis=0)
+            #print(rxn[0].shape,self.inventory[0].shape,np.zeros_like(self.inventory)[0].shape)
+            rxn = np.max(np.concatenate([rxn[0],np.zeros_like(self.inventory)[0]]).reshape(2,-1),axis=0)
+            rxn = np.min(np.concatenate([rxn,self.inventory[0]]).reshape(2,-1),axis=0)
             sink = rxn#+100.
             #print(rxn)
             #exit()
@@ -206,24 +209,26 @@ def demo():
         save_every=1e0,
     )
     if True:
-        variant = f"_ramp_rxn1.0"
-        p = BTEParams(
-            L=1e-3,
-            Nx=2048,
-            v=[10000*(1-0.005*a) for a in range(100)], #(3000.0, 1500.0),
-            tau=[8e-8*(1-0.005*a) for a in range(100)], #(8e-3, 8e-3),
-            C=[1e7*(1+0.005*a) for a in range(100)], #(1.0e7, 1.0e6),
-            dTL=[0.5,0.5,0.],      # +1 K at left
-            dTR=[1.5,1.5,0.],     # -1 K at right
-            cfl=0.9,
-            t_final=2e-6, #*3/10,
-            save_every=4, #1e0,
-        )
-        solver = BTESolver(p,bReact=True)
-        ts, Tsnaps, flux = solver.run(progress=True, write_flux=True)
-        with open(f'bte_1d_flux{variant}.pkl','wb') as file:
-            pickle.dump([ts,Tsnaps,flux],file)
-        print('pickle written')
+        for load in np.arange(5.,96.,5.):
+            variant = f"_ramp_rxn{load:.1f}"
+            p = BTEParams(
+                L=1e-3,
+                Nx=2048,
+                v=[10000*(1-0.005*a) for a in range(100)], #(3000.0, 1500.0),
+                tau=[8e-8*(1-0.005*a) for a in range(100)], #(8e-3, 8e-3),
+                C=[1e7*(1+0.005*a) for a in range(100)], #(1.0e7, 1.0e6),
+                dTL=[0.5,0.5,0.],      # +1 K at left
+                dTR=[1.5,1.5,0.],     # -1 K at right
+                load=load,
+                cfl=0.9,
+                t_final=2e-6, #*3/10,
+                save_every=4, #1e0,
+            )
+            solver = BTESolver(p,bReact=True)
+            ts, Tsnaps, flux = solver.run(progress=True, write_flux=True)
+            with open(f'bte_1d_flux{variant}.pkl','wb') as file:
+                pickle.dump([ts,Tsnaps,flux],file)
+            print('pickle written')
     elif False:
         variant = f"_cycle"
         p = BTEParams(
