@@ -101,7 +101,21 @@ class FluxLearner:
         #self.dNPOP = [{} for _ in range(self.ndeg+1)]
         self.dCF =  [{} for _ in range(self.ndeg+1)]
         self.dCN =  [{} for _ in range(self.ndeg+1)]
+        self.deg_Leg = 24
         #encoding = "_{side}{lev:.1f}"
+        for variant in ["_ramp_rxn1.0",]+[f"_ramp_rxn{load:.1f}" for load in np.arange(5.,101.,5.)]+[f"_ramp",f"_center"]:
+            with open(f"{pp}bte_1d_flux{variant}.pkl", "rb") as f:
+                ts, npop, flux = pickle.load(f) #next time I should have x, xcenter come through the pickle
+            npop *= self.mnpop #Scaling to natural dimension
+            self.Nunits = '[1e0]'
+            flux *= self.mflux
+            self.Funits = '[1e0]'
+            ts *= self.mts
+            self.Tunits = '[1e-10]' #'[1e-6]'
+            self.TS = ts[:]
+            self.dCF[self.ndeg][variant] = loadGinterpolants(self,ts, flux, 1, self.deg_Leg)
+            self.dCN[self.ndeg][variant] = loadGinterpolants(self,ts, npop, 1, self.deg_Leg)
+            #self.dFLUX[self.ndeg][variant] = flux[:]
         for deg in range(self.ndeg):
             for i,side in enumerate(self.sides):
                 for j,lev in enumerate(self.levels):
@@ -114,21 +128,9 @@ class FluxLearner:
                     self.Funits = '[1e0]'
                     ts *= self.mts
                     self.Tunits = '[1e-10]' #'[1e-6]'
-                    self.dTS[self.ndeg][variant] = ts[:]
-                    self.dFLUX[deg][variant] = flux[:]
-        for variant in [f"_rxn20.0",f"_ramp",f"_center"]:
-            with open(f"{pp}bte_1d_flux{variant}.pkl", "rb") as f:
-                ts, npop, flux = pickle.load(f) #next time I should have x, xcenter come through the pickle
-            npop *= self.mnpop #Scaling to natural dimension
-            self.Nunits = '[1e0]'
-            flux *= self.mflux
-            self.Funits = '[1e9]'
-            ts *= self.mts
-            self.Tunits = '[1e-10]' #'[1e-6]'
-            self.dTS[self.ndeg][variant] = ts[:]
-            self.dFLUX[self.ndeg][variant] = flux[:]
-            self.dNPOP[self.ndeg][variant] = npop[:]
-        self.deg_Leg = 24
+                    self.TS = ts[:] #I know I ought to have room for variable timesteps but its complicating
+                    self.dCF[deg][variant] = loadGinterpolants(self,ts, flux, 1, self.deg_Leg)
+                    #self.dFLUX[deg][variant] = flux[:]
         self.Ginf = None
         self.prop = Propagator()
         self.gf = Propagator()

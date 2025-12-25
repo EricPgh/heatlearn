@@ -205,7 +205,7 @@ def buildGreensFunction(FL):
                         lX.append( B0 )
                         #print(i,X.shape)
                         #Here Y is defined as the rate of change of observations. Alternatively could use just an observation of the system, but the physics being studied are nonlinear second order ODE (or nonlinear system of two first order ODE)
-                        F1 = np.array(FL.dGF[deg][variant][0][strt+i*major_stride:strt+i*major_stride+1]).T
+                        F1 = np.array(FL.dCF[deg][variant][0][strt+i*major_stride:strt+i*major_stride+1]).T
                         lY.append( F1 ) #The posteriors Y, are a composite of two coupled difference observations [dN/dt;dF/dt], e.g. the state of Y, hence the A matrix has 4x4 block form containing how Y evolves from each group of prior observations
             #It can be seen that the Y observation is X1-X0 while the X observation is X0. Thus the system behavior being trained is X1-X0 = A(X0). Given X0, the A propagator will yield X1-X0 and then X0. This Y observation is divided by the minor stride timestep to yield a proper first derivative approximate
             X = np.concatenate(lX,axis=1)
@@ -224,10 +224,10 @@ def buildGreensFunction(FL):
             #W = LLvt.T@inv(LLs)@LLu.T@Ac
             lAc.append(Ahom) #this will contain a time evolution of differential propagators
             #lTimes.append(ts[strt+i*major_stride+minor_stride]/2+ts[strt+i*major_stride+npts*minor_stride]/2) #here I'm sampling times at the same rate (major_stride) such that I have time positions aligned with Ac transforms
-            lTimes.append(FL.dTS[0][variant][strt+i*major_stride])#/2+ts[strt+(i+1)*major_stride]/2) #here I'm sampling times at the same rate (major_stride) such that I have time positions aligned with Ac transforms
+            lTimes.append(FL.TS[strt+i*major_stride])#/2+ts[strt+(i+1)*major_stride]/2) #here I'm sampling times at the same rate (major_stride) such that I have time positions aligned with Ac transforms
             #This might not be occuring the way I imagine it. Maybe I should just get the delta_t and increment that in the integration loop
         #print(lTimes[0])
-        FL.prop.buildMe(lTimes,lAc)
+        FL.gf.buildMe(lTimes,lAc)
     FL.Ginf=Ginf
     #plot_A_elements(props,[ ([0.,0.05],'^'),
     #                        ([0.05,0.2],'o'),
@@ -377,11 +377,25 @@ def integrate(FL,prop=None):
     plt.savefig('bte_boundary_fluxpredictor_performance.png')
     plt.show()
     
-def convolve(FL,Ainf=None):
-    if True:
-        with open(f"bte_1d_flux_ramp.pkl", "rb") as f:
+def convolve(FL,Ainf=None,sim=None):
+    if sim=='cycle':
+        cleft=[ 8.9e+00,  2.0e-15, -6.9e+00, -3.0e-16, -3.4e+00, -3.1e-15,  1.2e+00, -1.5e-15,
+                9.3e-01,  2.7e-15, -8.2e-01,  2.6e-15, -2.3e-01,  1.8e-15,  6.0e-01,  2.6e-15,
+                -5.6e-02,  7.6e-16, -3.8e-01, -2.9e-15,  2.0e-01, -3.2e-15,  2.1e-01, -6.3e-16,
+                -2.4e-01]
+        cright=[ 7.3e+00,  1.1e-15, -5.6e+00,  3.6e-16, -2.8e+00, -2.8e-15,  9.9e-01, -1.7e-15,
+                7.6e-01,  1.0e-15, -6.7e-01,  3.5e-16, -1.9e-01, -4.4e-16,  4.9e-01,  3.6e-16,
+                -4.6e-02, -4.0e-16, -3.1e-01, -2.6e-15,  1.7e-01, -2.0e-15,  1.7e-01,  5.3e-16,
+                -2.0e-01]
+        bflux = []
+        for fl,fr in zip(cleft,cright):
+            bflux+=[fl,fr]
+        with open(f"pkls/bte_1d_flux_cycle.pkl", "rb") as f:
             ts, npop, flux = pickle.load(f) #next time I should have x, xcenter come through the pickle
-        bflux = np.array([0.5,1.5,0.5,1.5,0.,0.]) #1.,3.])
+    elif sim=='ramp':
+        with open(f"pkls/bte_1d_flux_ramp.pkl", "rb") as f:
+            ts, npop, flux = pickle.load(f) #next time I should have x, xcenter come through the pickle
+        bflux = np.array([0.5,1.5,0.5,1.5,0.,0.]+[0.]*44) #1.,3.])
     else:
         with open(f"bte_1d_flux_right1.0.pkl", "rb") as f:
             ts, npop, flux = pickle.load(f) #next time I should have x, xcenter come through the pickle
@@ -460,9 +474,10 @@ def convolve(FL,Ainf=None):
                     t_i = t
                 bflux_prev = np.zeros_like(bflux) #what is the previous bc for this application?
                 if Ainf is None:
-                    c1=FL.Ginf@(bflux-bflux_prev)+FL.prop.A_of_t(t_i)@bflux
+                    c1=FL.Ginf@(bflux-bflux_prev)+FL.gf.A_of_t(t_i)@bflux
+                    #c1=FL.gf.A_of_t(t_i)@bflux
                 else:
-                    c1=Ainf@(bflux-bflux_prev)+FL.prop.A_of_t(t_i)@bflux
+                    c1=Ainf@(bflux-bflux_prev)+FL.gf.A_of_t(t_i)@bflux
                 c0=c1 #update c_i solutions
                 #print(c0)
                 #i+=1
