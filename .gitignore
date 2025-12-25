@@ -9,6 +9,7 @@
 .DS_Store
 .virtual_documents
 yield_models.ipynb
+brillouin_models.ipynb
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

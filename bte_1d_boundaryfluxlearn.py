@@ -80,30 +80,33 @@ def buildPropagators(FL):
         for i in range(nA):
             lX = []
             lY = []
+            t_i = FL.dTS[variant][strt+(i-1)*major_stride]
+            GF_i = FL.gf.A_of_t(t_i)@bflux
+            
+            #for k,lev in enumerate(FL.levels):
+            #variant = f"_{side}{lev:.1f}"
+            variant = f"_center"
+            nidx = len(FL.sides)#*ndeg_bv #what is the dimension of the boundary flux vector, only operating with 1 degree (constant)
+
+            npts = 6 #nDMD(i*major_stride)
+            cmp = npts #cDMD(i*major_stride)
+            #Again using a second order scheme for integrating
+            F0 = np.array(FL.dGF[variant][0][strt+i*major_stride  :strt+i*major_stride+npts*minor_stride  :minor_stride]).T
             for j,side in enumerate(FL.sides):
-                for k,lev in enumerate(FL.levels):
-                    variant = f"_{side}{lev:.1f}"
-                    idx = j  #which index of the boundary flux vector should get assigned the level
-                    nidx = len(FL.sides)#*ndeg_bv #what is the dimension of the boundary flux vector, only operating with 1 degree (constant)
-    
-                    npts = 6 #nDMD(i*major_stride)
-                    cmp = npts #cDMD(i*major_stride)
-                    #Again using a second order scheme for integrating
-                    F0 = np.array(FL.dGF[variant][0][strt+i*major_stride  :strt+i*major_stride+npts*minor_stride  :minor_stride]).T
-                    B0 = np.zeros( (nidx,npts) );B0[idx,:] = lev
-                    #print(N0.shape,F0.shape)
-                    #The priors X, are a composite of two coupled observations [N0;F0], both contributing to the prediction of Y, hence the A matrix has twice the size containing how Y evolves from each group of prior observations
-                    #Adding to this are the boundary flux levels which should impact the F posteriors
-                    lX.append( np.concatenate((F0,B0),axis=0) )
-                    #print(i,X.shape)
-                    #Here Y is defined as the rate of change of observations. Alternatively could use just an observation of the system, but the physics being studied are nonlinear second order ODE (or nonlinear system of two first order ODE)
-                    F1 = np.array(FL.dGF[variant][0][strt+i*major_stride+minor_stride:strt+i*major_stride+npts*minor_stride+minor_stride:minor_stride]).T
-                    if True:
-                        dF = (F1-F0)/minor_stride
-                    else:
-                        dF = F1/minor_stride
-                    #The boundary levels don't appear in the Y values because they are priors only, not posteriors
-                    lY.append( dF ) #The posteriors Y, are a composite of two coupled difference observations [dN/dt;dF/dt], e.g. the state of Y, hence the A matrix has 4x4 block form containing how Y evolves from each group of prior observations
+                B0 = np.zeros( (nidx,npts) );B0[idx,:] = lev
+            #print(N0.shape,F0.shape)
+            #The priors X, are a composite of two coupled observations [N0;F0], both contributing to the prediction of Y, hence the A matrix has twice the size containing how Y evolves from each group of prior observations
+            #Adding to this are the boundary flux levels which should impact the F posteriors
+            lX.append( np.concatenate((F0,B0),axis=0) )
+            #print(i,X.shape)
+            #Here Y is defined as the rate of change of observations. Alternatively could use just an observation of the system, but the physics being studied are nonlinear second order ODE (or nonlinear system of two first order ODE)
+            F1 = np.array(FL.dGF[variant][0][strt+i*major_stride+minor_stride:strt+i*major_stride+npts*minor_stride+minor_stride:minor_stride]).T
+            if True:
+                dF = (F1-F0)/minor_stride
+            else:
+                dF = F1/minor_stride
+            #The boundary levels don't appear in the Y values because they are priors only, not posteriors
+            lY.append( dF ) #The posteriors Y, are a composite of two coupled difference observations [dN/dt;dF/dt], e.g. the state of Y, hence the A matrix has 4x4 block form containing how Y evolves from each group of prior observations
             #It can be seen that the Y observation is X1-X0 while the X observation is X0. Thus the system behavior being trained is X1-X0 = A(X0). Given X0, the A propagator will yield X1-X0 and then X0. This Y observation is divided by the minor stride timestep to yield a proper first derivative approximate
             X = np.concatenate(lX,axis=1)
             u,s,vt = svd(X,full_matrices=False) #full matrices=false, want to be able to compress, S has nonzero only
@@ -163,7 +166,7 @@ def buildGreensFunction(FL):
                 lX.append( B0 )
                 #print(i,X.shape)
                 #Here Y is defined as the rate of change of observations. Alternatively could use just an observation of the system, but the physics being studied are nonlinear second order ODE (or nonlinear system of two first order ODE)
-                F1 = np.array(FL.dGF[deg][variant][0][-1:]).T
+                F1 = np.array(FL.dCF[deg][variant][0][-1:]).T
                 lY.append( F1 ) #The posteriors Y, are a composite of two coupled difference observations [dN/dt;dF/dt], e.g. the state of Y, hence the A matrix has 4x4 block form containing how Y evolves from each group of prior observations
     #It can be seen that the Y observation is X1-X0 while the X observation is X0. Thus the system behavior being trained is X1-X0 = A(X0). Given X0, the A propagator will yield X1-X0 and then X0. This Y observation is divided by the minor stride timestep to yield a proper first derivative approximate
     X = np.concatenate(lX,axis=1)

@@ -78,12 +78,15 @@ def pseudo_inverse_from_svd(u, s, vt, r=None, tol=1e-12):
 
 class FluxLearner:
     def __init__(self):
+        pp='pkls/'
         self.bPlot=False
         self.bPlotEig=False
         self.L= 1.0 #mm 1e-3
         self.Lunits = 'mm'
         self.mflux = 1e0 #-9
         self.mts = 1e10 #1e6
+        self.mnpop = 1e0 #Scaling to natural dimension
+        self.Nunits = '[1e0]'
         self.Nx=2048
         self.Linert = 100
         self.Rinert = 100
@@ -92,40 +95,52 @@ class FluxLearner:
         self.xcenter = self.x[self.Linert:self.Mactive]
         self.sides = ['left','right']
         self.levels = [0.8,0.9,1.0,1.1,1.2]
-        self.ndeg = 3
+        self.ndeg = 25
         self.dTS = [{} for _ in range(self.ndeg+1)]
         self.dFLUX = [{} for _ in range(self.ndeg+1)]
+        self.dNPOP = [{} for _ in range(self.ndeg+1)]
+        self.dCF =  [{} for _ in range(self.ndeg+1)]
+        self.dCN =  [{} for _ in range(self.ndeg+1)]
         #encoding = "_{side}{lev:.1f}"
         for deg in range(self.ndeg):
             for i,side in enumerate(self.sides):
                 for j,lev in enumerate(self.levels):
                     variant = f"_{side}{lev:.1f}"
-                    with open(f"bte_1d_flux_deg{deg}{variant}.pkl", "rb") as f:
+                    with open(f"{pp}bte_1d_flux_deg{deg}{variant}.pkl", "rb") as f:
                         ts, npop, flux = pickle.load(f) #next time I should have x, xcenter come through the pickle
+                    npop *= self.mnpop #Scaling to natural dimension
+                    self.Nunits = '[1e0]'
                     flux *= self.mflux
-                    self.Funits = '[1e9]'
+                    self.Funits = '[1e0]'
                     ts *= self.mts
                     self.Tunits = '[1e-10]' #'[1e-6]'
                     self.dTS[deg][variant] = ts[:]
                     self.dFLUX[deg][variant] = flux[:]
-        variant = f"_ramp"
-        with open(f"bte_1d_flux{variant}.pkl", "rb") as f:
-            ts, npop, flux = pickle.load(f) #next time I should have x, xcenter come through the pickle
-        flux *= self.mflux
-        self.Funits = '[1e9]'
-        ts *= self.mts
-        self.Tunits = '[1e-10]' #'[1e-6]'
-        self.dTS[self.ndeg][variant] = ts[:]
-        self.dFLUX[self.ndeg][variant] = flux[:]
+        for variant in [f"_rxn20.0",f"_ramp",f"_center"]:
+            with open(f"{pp}bte_1d_flux{variant}.pkl", "rb") as f:
+                ts, npop, flux = pickle.load(f) #next time I should have x, xcenter come through the pickle
+            npop *= self.mnpop #Scaling to natural dimension
+            self.Nunits = '[1e0]'
+            flux *= self.mflux
+            self.Funits = '[1e9]'
+            ts *= self.mts
+            self.Tunits = '[1e-10]' #'[1e-6]'
+            self.dTS[self.ndeg][variant] = ts[:]
+            self.dFLUX[self.ndeg][variant] = flux[:]
         self.deg_Leg = 24
-        self.dGF =  [{} for _ in range(self.ndeg+1)]
         self.Ginf = None
         self.prop = Propagator()
+        self.gf = Propagator()
 
-    def digest_fields(self):
+    def digest_boundary_fields(self):
         for deg in range(self.ndeg):
             for i,side in enumerate(self.sides):
                 for j,lev in enumerate(self.levels):
                     variant = f"_{side}{lev:.1f}"
-                    self.dGF[deg][variant] = loadGinterpolants(self,self.dTS[deg][variant], self.dFLUX[deg][variant], 1, self.deg_Leg)
+                    self.dCF[deg][variant] = loadGinterpolants(self,self.dTS[deg][variant], self.dFLUX[deg][variant], 1, self.deg_Leg)
 
+    def digest_fields(self):
+        variant = f"_rxn20.0"
+        deg = self.ndeg
+        self.dCF[deg][variant] = loadGinterpolants(self,self.dTS[deg][variant], self.dFLUX[deg][variant], 1, self.deg_Leg)
+        self.dCN[deg][variant] = loadGinterpolants(self,self.dTS[deg][variant], self.dNPOP[deg][variant], 1, self.deg_Leg)
