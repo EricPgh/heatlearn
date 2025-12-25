@@ -1,6 +1,7 @@
 #large data files
 *.tar.gz
 *.pkl
+pkls
 
 #patches
 *.patch
